@@ -3,12 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Three.js Pong</title>
+    <title>Pong</title>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
     <div id="score">Player 1: 0 | Player 2: 0</div>
     <div id="game-container"></div>
+    <div id="game-over" class="hidden">
+        <div class="game-over-content">
+            <h1>Game Over!</h1>
+            <p id="winner-text"></p>
+            <button id="play-again">Play Again</button>
+        </div>
+    </div>
     <script type="importmap">
     {
         "imports": {
