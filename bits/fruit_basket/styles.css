@@ -1,0 +1,34 @@
+body {
+    margin: 0;
+    overflow: hidden;
+    background: #87CEEB; /* Sky blue */
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+canvas {
+    display: block;
+}
+
+#score {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    font-family: Arial, sans-serif;
+    font-size: 24px;
+    color: white;
+}
+
+#game-over {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-family: Arial, sans-serif;
+    font-size: 32px;
+    color: white;
+    text-align: center;
+    display: none;
+}
