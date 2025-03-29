@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Tilt Maze</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="game-container">
+        <div id="game-canvas"></div>
+        <div id="ui-overlay">
+            <div id="level-info">Level: <span id="level-num">1</span></div>
+            <div id="timer">Time: <span id="time-value">00:00</span></div>
+            <div id="message" class="hidden"></div>
+        </div>
+        <div id="start-screen">
+            <h1>Tilt Maze</h1>
+            <p>Tilt the maze to guide the ball to the goal!</p>
+            <button id="start-button">Start Game</button>
+        </div>
+    </div>
+    
+    <!-- Three.js library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/0.149.0/three.min.js"></script>
+    
+    <!-- Physics engine (Cannon.js) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>
+    
+    <!-- Game script -->
+    <script src="game.js"></script>
+</body>
+</html>
