@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Balloon Pop</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.4/gsap.min.js"></script>
+</head>
+<body>
+    <div id="game-container">
+        <div id="score">Score: 0</div>
+        <div id="timer">Time: 60s</div>
+        <div id="game-over" class="hidden">
+            <h2>Game Over!</h2>
+            <p id="final-score">Final Score: 0</p>
+            <button id="restart-button">Play Again</button>
+        </div>
+        <div id="start-screen">
+            <h1>Balloon Pop!</h1>
+            <p>Pop as many balloons as you can before time runs out!</p>
+            <button id="start-button">Start Game</button>
+        </div>
+    </div>
+    <script src="game.js"></script>
+</body>
+</html>
