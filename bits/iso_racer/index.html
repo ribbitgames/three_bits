@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Iso Racer</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="game-container">
+        <div id="loading">Loading...</div>
+        <div id="hud">
+            <div id="speed">Speed: 0</div>
+            <div id="lap">Lap: 1/3</div>
+            <div id="position">Position: 1/4</div>
+        </div>
+        <div id="controls">
+            <div id="joystick-zone"></div>
+            <div id="boost-button">BOOST</div>
+        </div>
+        <div id="start-screen">
+            <h1>ISO RACER</h1>
+            <button id="start-button">START RACE</button>
+        </div>
+        <div id="end-screen" class="hidden">
+            <h1>RACE FINISHED</h1>
+            <div id="final-position"></div>
+            <button id="restart-button">RACE AGAIN</button>
+        </div>
+    </div>
+
+    <!-- Import Three.js and plugins -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/nipplejs/0.9.0/nipplejs.min.js"></script>
+    <script src="game.js"></script>
+</body>
+</html>

@@ -1,0 +1,124 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+}
+
+body, html {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    font-family: 'Arial', sans-serif;
+    background-color: #000;
+}
+
+#game-container {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    touch-action: none;
+}
+
+#hud {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    z-index: 10;
+    color: #fff;
+    font-size: 18px;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+#hud div {
+    margin-bottom: 10px;
+}
+
+#controls {
+    display: none;
+}
+
+#boost-button {
+    display: none;
+}
+
+#loading {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.8);
+    color: white;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 24px;
+    z-index: 100;
+}
+
+#start-screen, #end-screen {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.8);
+    color: white;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    z-index: 50;
+}
+
+#start-screen h1, #end-screen h1 {
+    font-size: 36px;
+    margin-bottom: 30px;
+    text-align: center;
+    text-shadow: 0 0 10px #f00, 0 0 20px #f00;
+}
+
+button {
+    padding: 15px 30px;
+    background-color: #f00;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    font-size: 18px;
+    cursor: pointer;
+    margin-top: 20px;
+}
+
+button:hover {
+    background-color: #c00;
+}
+
+.hidden {
+    display: none !important;
+}
+
+#final-position {
+    font-size: 24px;
+    margin: 20px 0;
+}
+
+@media (orientation: landscape) {
+    #controls {
+        padding-bottom: 40px;
+    }
+}
+
+@media (min-width: 768px) {
+    #joystick-zone {
+        width: 150px;
+        height: 150px;
+    }
+    
+    #boost-button {
+        width: 100px;
+        height: 100px;
+    }
+}
