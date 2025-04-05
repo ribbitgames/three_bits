@@ -557,11 +557,17 @@ function animate() {
 }
 
 /**
- * Update AI car positions
+ * Update AI car positions using a movement system comparable to the player's
  */
 function updateAICars() {
     aiCars.forEach(car => {
         const prevPosition = car.trackPosition;
+        
+        // Calculate equivalent angular speed based on track radius to match player's linear speed
+        const equivalentAngularSpeed = (MAX_SPEED / TRACK_RADIUS) * car.difficulty;
+        car.speed = equivalentAngularSpeed;
+        
+        // Advance position using the recalibrated speed
         car.trackPosition += car.speed;
 
         if (car.trackPosition >= Math.PI * 2) {
@@ -572,6 +578,7 @@ function updateAICars() {
             }
         }
 
+        // Allow AI cars to move slightly toward or away from track center
         const radius = TRACK_RADIUS + (Math.sin(car.trackPosition * 5) * TRACK_WIDTH * 0.3);
         car.position.x = Math.cos(car.trackPosition) * radius;
         car.position.z = Math.sin(car.trackPosition) * radius;
@@ -579,13 +586,7 @@ function updateAICars() {
         // Face tangent direction
         car.rotation.y = -car.trackPosition;
 
-        const targetSpeed = MAX_SPEED * AI_SPEED_FACTOR;
-        if (car.speed < targetSpeed) {
-            car.speed += ACCELERATION * 0.02;
-        } else {
-            car.speed *= FRICTION;
-        }
-
+        // Add some randomness to AI driving behavior
         if (Math.random() < 0.02) {
             car.speed *= 0.8;
         }
