@@ -316,20 +316,29 @@ function createObstacles() {
  * Set up controls (mouse/touch follow system) for isometric view
  */
 function setupControls() {
+    // Track if input is active (mouse down/touch)
+    let isInputActive = false;
+    
     renderer.domElement.addEventListener('mousedown', (event) => {
         if (!isRaceStarted || isRaceFinished) return;
+        isInputActive = true;
         handleInput(event);
     });
     
     renderer.domElement.addEventListener('mousemove', (event) => {
-        if (!isRaceStarted || isRaceFinished) return;
-        if (event.buttons === 1) {
-            handleInput(event);
-        }
+        if (!isRaceStarted || isRaceFinished || !isInputActive) return;
+        handleInput(event);
+    });
+    
+    renderer.domElement.addEventListener('mouseup', () => {
+        isInputActive = false;
+        // Start decelerating when input stops
+        speed = Math.max(0, speed - DECELERATION);
     });
     
     renderer.domElement.addEventListener('touchstart', (event) => {
         if (!isRaceStarted || isRaceFinished) return;
+        isInputActive = true;
         handleInput(event.touches[0]);
         event.preventDefault();
     });
@@ -340,26 +349,54 @@ function setupControls() {
         event.preventDefault();
     });
     
+    renderer.domElement.addEventListener('touchend', () => {
+        isInputActive = false;
+        // Start decelerating when input stops
+        speed = Math.max(0, speed - DECELERATION);
+    });
+    
     function handleInput(event) {
+        // Get normalized device coordinates
         const rect = renderer.domElement.getBoundingClientRect();
         const x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
         const y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
         
+        // Create a vector for raycasting
         const vector = new THREE.Vector3(x, y, 0.5);
         vector.unproject(camera);
         
+        // Get direction and calculate intersection with ground plane
         const dir = vector.sub(camera.position).normalize();
-        const distance = -camera.position.y / dir.y;
-        const pos = camera.position.clone().add(dir.multiplyScalar(distance));
+        const planeNormal = new THREE.Vector3(0, 1, 0);
+        const planePoint = new THREE.Vector3(0, 0, 0);
         
-        const dx = pos.x - playerCar.position.x;
-        const dz = pos.z - playerCar.position.z;
-        
-        // Fix inversion: point local Z toward cursor
-        const targetAngle = Math.atan2(dx, -dz);
-        playerCar.rotation.y = targetAngle;
-        
-        speed = MAX_SPEED * 0.7;
+        // Calculate ray-plane intersection
+        const denominator = planeNormal.dot(dir);
+        if (Math.abs(denominator) > 0.0001) {
+            const t = planeNormal.dot(planePoint.clone().sub(camera.position)) / denominator;
+            const pos = camera.position.clone().add(dir.clone().multiplyScalar(t));
+            
+            // Calculate angle between car and target position
+            const dx = pos.x - playerCar.position.x;
+            const dz = pos.z - playerCar.position.z;
+            
+            // Calculate target angle in isometric space
+            const targetAngle = Math.atan2(dx, dz);
+            
+            // Apply smooth rotation toward target
+            const angleDiff = normalizeAngle(targetAngle - playerCar.rotation.y);
+            playerCar.rotation.y += angleDiff * STEERING_SPEED;
+            
+            // Accelerate when input is active
+            speed = Math.min(MAX_SPEED, speed + ACCELERATION);
+        }
+    }
+    
+    // Helper to normalize angle difference to -PI,PI range
+    function normalizeAngle(angle) {
+        while (angle > Math.PI) angle -= Math.PI * 2;
+        while (angle < -Math.PI) angle += Math.PI * 2;
+        return angle;
     }
 }
 
@@ -452,16 +489,32 @@ function animate() {
  * Update player car position and rotation
  */
 function updatePlayerCar() {
+    // Apply friction
     speed *= FRICTION;
-    speed = Math.max(-MAX_SPEED / 2, Math.min(MAX_SPEED, speed));
+    
+    // Clamp speed
+    speed = Math.max(0, Math.min(MAX_SPEED, speed));
 
-    // Move along local Z-axis
+    if (speed < 0.001) speed = 0; // Stop completely at very low speeds
+    
+    // Move along the direction the car is facing
     const moveX = Math.sin(playerCar.rotation.y) * speed;
     const moveZ = Math.cos(playerCar.rotation.y) * speed;
-
+    
     playerCar.position.x += moveX;
     playerCar.position.z += moveZ;
+    
+    // Visual car body tilt effect during turning
+    if (playerCar.carMesh) {
+        // Reset tilt
+        playerCar.carMesh.rotation.z = 0;
+        
+        // Apply tilt based on turning
+        const turnRate = Math.sin(playerCar.rotation.y) * speed * 5;
+        playerCar.carMesh.rotation.z = -turnRate * 0.2; // Tilt factor
+    }
 
+    // Track boundary handling and lap counting logic remains unchanged
     const distanceFromCenter = Math.sqrt(
         playerCar.position.x * playerCar.position.x +
         playerCar.position.z * playerCar.position.z
