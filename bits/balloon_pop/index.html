@@ -3,26 +3,32 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Balloon Pop</title>
+    <title>Balloon Pop Game</title>
     <link rel="stylesheet" href="styles.css">
-    <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.4/gsap.min.js"></script>
 </head>
 <body>
     <div id="game-container">
-        <div id="score">Score: 0</div>
-        <div id="timer">Time: 60s</div>
-        <div id="game-over" class="hidden">
-            <h2>Game Over!</h2>
-            <p id="final-score">Final Score: 0</p>
-            <button id="restart-button">Play Again</button>
-        </div>
-        <div id="start-screen">
-            <h1>Balloon Pop!</h1>
-            <p>Pop as many balloons as you can before time runs out!</p>
-            <button id="start-button">Start Game</button>
+        <div id="score-container">Score: <span id="score">0</span></div>
+        <div id="time-container">Time: <span id="time">60</span>s</div>
+        <div id="game-overlay" class="visible">
+            <div id="game-menu" class="visible">
+                <h1>Balloon Pop!</h1>
+                <button id="start-button">Start Game</button>
+                <div id="high-score">High Score: 0</div>
+                <div id="instructions">
+                    <p>Pop as many balloons as you can in 60 seconds!</p>
+                    <p>Tap or click balloons to pop them.</p>
+                    <p><span style="color: red;">Avoid red balloons!</span> They cost you 10 points.</p>
+                </div>
+            </div>
+            <div id="game-over" class="hidden">
+                <h1>Game Over!</h1>
+                <div id="final-score">Score: 0</div>
+                <button id="restart-button">Play Again</button>
+            </div>
         </div>
     </div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="game.js"></script>
 </body>
 </html>
