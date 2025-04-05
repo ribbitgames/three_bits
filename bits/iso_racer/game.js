@@ -319,21 +319,31 @@ function setupControls() {
     // Track if input is active (mouse down/touch)
     let isInputActive = false;
     
+    // Expose isInputActive to be used in updatePlayerCar
+    window.isInputActive = false;
+    
     renderer.domElement.addEventListener('mousedown', (event) => {
         if (!isRaceStarted || isRaceFinished) return;
         isInputActive = true;
+        window.isInputActive = true;
+        // Apply immediate acceleration on click
+        speed += ACCELERATION * 5;
         handleInput(event);
     });
     
     renderer.domElement.addEventListener('mousemove', (event) => {
-        if (!isRaceStarted || isRaceFinished || !isInputActive) return;
-        handleInput(event);
+        if (!isRaceStarted || isRaceFinished) return;
+        // Check actual mouse button state rather than just our flag
+        isInputActive = event.buttons === 1;
+        if (isInputActive) {
+            handleInput(event);
+        }
     });
     
     renderer.domElement.addEventListener('mouseup', () => {
         isInputActive = false;
-        // Start decelerating when input stops
-        speed = Math.max(0, speed - DECELERATION);
+        window.isInputActive = false;
+        // No immediate deceleration - let friction handle it
     });
     
     renderer.domElement.addEventListener('touchstart', (event) => {
@@ -387,8 +397,8 @@ function setupControls() {
             const angleDiff = normalizeAngle(targetAngle - playerCar.rotation.y);
             playerCar.rotation.y += angleDiff * STEERING_SPEED;
             
-            // Accelerate when input is active
-            speed = Math.min(MAX_SPEED, speed + ACCELERATION);
+            // Accelerate when input is active - apply full acceleration
+            speed = Math.min(MAX_SPEED, speed + ACCELERATION * 2);
         }
     }
     
@@ -397,6 +407,67 @@ function setupControls() {
         while (angle > Math.PI) angle -= Math.PI * 2;
         while (angle < -Math.PI) angle += Math.PI * 2;
         return angle;
+    }
+}
+
+/**
+ * Update player car position and rotation
+ */
+function updatePlayerCar() {
+    // Apply friction only if not actively accelerating
+    if (!window.isInputActive) {
+        speed *= FRICTION;
+    }
+    
+    // Clamp speed
+    speed = Math.max(0, Math.min(MAX_SPEED, speed));
+
+    if (speed < 0.001) speed = 0; // Stop completely at very low speeds
+    
+    // Move along the direction the car is facing
+    const moveX = Math.sin(playerCar.rotation.y) * speed;
+    const moveZ = Math.cos(playerCar.rotation.y) * speed;
+    
+    playerCar.position.x += moveX;
+    playerCar.position.z += moveZ;
+    
+    // Note: Removed car tilt code as it's now handled in handleInput
+    
+    // Visual car body tilt effect during turning
+    if (playerCar.carMesh) {
+        // Reset tilt
+        playerCar.carMesh.rotation.z = 0;
+        
+        // Apply tilt based on turning
+        const turnRate = Math.sin(playerCar.rotation.y) * speed * 5;
+        playerCar.carMesh.rotation.z = -turnRate * 0.2; // Tilt factor
+    }
+
+    // Track boundary handling and lap counting logic remains unchanged
+    const distanceFromCenter = Math.sqrt(
+        playerCar.position.x * playerCar.position.x +
+        playerCar.position.z * playerCar.position.z
+    );
+    const angleToCenter = Math.atan2(playerCar.position.z, playerCar.position.x);
+
+    if (distanceFromCenter > TRACK_RADIUS + TRACK_WIDTH / 2) {
+        playerCar.position.x -= Math.cos(angleToCenter) * GRAVITY;
+        playerCar.position.z -= Math.sin(angleToCenter) * GRAVITY;
+        speed *= 0.95;
+    } else if (distanceFromCenter < TRACK_RADIUS - TRACK_WIDTH / 2) {
+        playerCar.position.x += Math.cos(angleToCenter) * GRAVITY;
+        playerCar.position.z += Math.sin(angleToCenter) * GRAVITY;
+        speed *= 0.95;
+    }
+
+    const prevAngle = trackProgress;
+    trackProgress = (Math.atan2(playerCar.position.z, playerCar.position.x) + Math.PI) / (Math.PI * 2);
+
+    if (prevAngle > 0.9 && trackProgress < 0.1) {
+        currentLap++;
+        if (currentLap > TOTAL_LAPS) {
+            finishRace();
+        }
     }
 }
 
@@ -483,63 +554,6 @@ function animate() {
     }
 
     renderer.render(scene, camera);
-}
-
-/**
- * Update player car position and rotation
- */
-function updatePlayerCar() {
-    // Apply friction
-    speed *= FRICTION;
-    
-    // Clamp speed
-    speed = Math.max(0, Math.min(MAX_SPEED, speed));
-
-    if (speed < 0.001) speed = 0; // Stop completely at very low speeds
-    
-    // Move along the direction the car is facing
-    const moveX = Math.sin(playerCar.rotation.y) * speed;
-    const moveZ = Math.cos(playerCar.rotation.y) * speed;
-    
-    playerCar.position.x += moveX;
-    playerCar.position.z += moveZ;
-    
-    // Visual car body tilt effect during turning
-    if (playerCar.carMesh) {
-        // Reset tilt
-        playerCar.carMesh.rotation.z = 0;
-        
-        // Apply tilt based on turning
-        const turnRate = Math.sin(playerCar.rotation.y) * speed * 5;
-        playerCar.carMesh.rotation.z = -turnRate * 0.2; // Tilt factor
-    }
-
-    // Track boundary handling and lap counting logic remains unchanged
-    const distanceFromCenter = Math.sqrt(
-        playerCar.position.x * playerCar.position.x +
-        playerCar.position.z * playerCar.position.z
-    );
-    const angleToCenter = Math.atan2(playerCar.position.z, playerCar.position.x);
-
-    if (distanceFromCenter > TRACK_RADIUS + TRACK_WIDTH / 2) {
-        playerCar.position.x -= Math.cos(angleToCenter) * GRAVITY;
-        playerCar.position.z -= Math.sin(angleToCenter) * GRAVITY;
-        speed *= 0.95;
-    } else if (distanceFromCenter < TRACK_RADIUS - TRACK_WIDTH / 2) {
-        playerCar.position.x += Math.cos(angleToCenter) * GRAVITY;
-        playerCar.position.z += Math.sin(angleToCenter) * GRAVITY;
-        speed *= 0.95;
-    }
-
-    const prevAngle = trackProgress;
-    trackProgress = (Math.atan2(playerCar.position.z, playerCar.position.x) + Math.PI) / (Math.PI * 2);
-
-    if (prevAngle > 0.9 && trackProgress < 0.1) {
-        currentLap++;
-        if (currentLap > TOTAL_LAPS) {
-            finishRace();
-        }
-    }
 }
 
 /**
