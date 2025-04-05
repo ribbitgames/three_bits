@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Speedway Racer</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="game-container">
+        <div id="ui-overlay">
+            <div id="speed-meter">Speed: <span id="speed-value">0</span> mph</div>
+            <div id="lap-counter">Lap: <span id="lap-value">0</span>/3</div>
+            <div id="timer">Time: <span id="time-value">0:00</span></div>
+        </div>
+        <div id="game-screens">
+            <div id="start-screen">
+                <h1>Speedway Racer</h1>
+                <p>Tap or click to steer your car around the track!</p>
+                <button id="start-button">START RACE</button>
+            </div>
+            <div id="game-over-screen" class="hidden">
+                <h1 id="finish-message">Race Complete!</h1>
+                <div id="final-time">Your time: <span id="final-time-value">0:00</span></div>
+                <button id="restart-button">RACE AGAIN</button>
+            </div>
+        </div>
+    </div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="game.js"></script>
+</body>
+</html>
