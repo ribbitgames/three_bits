@@ -11,6 +11,8 @@ const INITIAL_BALL_SPEED = 5/3;  // One third of original speed
 const BALL_SPEED_INCREASE = 1.03;  // 3% increase on each hit
 const MAX_SCORE = 5;
 
+// This is a test.
+
 // Table dimensions
 const TABLE_WIDTH = 800;
 const TABLE_HEIGHT = 600;
