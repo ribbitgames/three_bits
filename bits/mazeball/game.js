@@ -192,9 +192,14 @@ function generateMaze(width, height) {
     // Stack for DFS algorithm
     const stack = [];
     
-    // Random starting point (must be odd coordinates)
-    const startX = 1;
-    const startY = 1;
+    // Random starting point (must be odd coordinates to maintain grid structure)
+    // Choose odd numbers between 1 and width/height - 2
+    let startX, startY;
+    
+    do {
+        startX = Math.floor(Math.random() * Math.floor((width - 2) / 2)) * 2 + 1;
+        startY = Math.floor(Math.random() * Math.floor((height - 2) / 2)) * 2 + 1;
+    } while (startX >= width - 1 || startY >= height - 1);
     
     // Mark starting cell as path
     maze[startY][startX] = 0;
@@ -243,10 +248,25 @@ function generateMaze(width, height) {
             stack.pop();
         }
     }
-
-    // Create start and end points
-    maze[1][1] = 0; // Start
-    maze[height - 2][width - 2] = 0; // End
+    
+    // Ensure there are multiple pathways by randomly opening some walls
+    const extraPaths = Math.floor(Math.sqrt(width * height) / 2);
+    for (let i = 0; i < extraPaths; i++) {
+        let wx = Math.floor(Math.random() * (width - 2)) + 1;
+        let wy = Math.floor(Math.random() * (height - 2)) + 1;
+        if (maze[wy][wx] === 1) {
+            // Only open this wall if it doesn't create a 2x2 open space
+            let openNeighbors = 0;
+            if (wx > 0 && maze[wy][wx-1] === 0) openNeighbors++;
+            if (wx < width-1 && maze[wy][wx+1] === 0) openNeighbors++;
+            if (wy > 0 && maze[wy-1][wx] === 0) openNeighbors++;
+            if (wy < height-1 && maze[wy+1][wx] === 0) openNeighbors++;
+            
+            if (openNeighbors <= 2) {
+                maze[wy][wx] = 0;
+            }
+        }
+    }
     
     return maze;
 }
@@ -309,14 +329,65 @@ function buildMaze(mazeData) {
     player.material.emissiveIntensity = 0.2;
     player.visible = true; // Make sure player is visible
     
-    // Set player start position
-    player.position.x = 1 * CELL_SIZE - (mazeData[0].length * CELL_SIZE) / 2 + CELL_SIZE / 2;
-    player.position.z = 1 * CELL_SIZE - (mazeData.length * CELL_SIZE) / 2 + CELL_SIZE / 2;
+    // Find all possible empty cells for player start and goal positions
+    const emptyCells = [];
+    for (let y = 1; y < mazeData.length - 1; y++) {
+        for (let x = 1; x < mazeData[y].length - 1; x++) {
+            if (mazeData[y][x] === 0) {
+                emptyCells.push({x, y});
+            }
+        }
+    }
+    
+    // We need at least 2 empty cells for start and goal
+    if (emptyCells.length < 2) {
+        console.error("Not enough empty cells in maze");
+        return;
+    }
+    
+    // Store the start and goal positions if this is the first time building the maze
+    if (!isDead) {
+        // Randomly select start position from empty cells
+        const startIndex = Math.floor(Math.random() * emptyCells.length);
+        const startCell = emptyCells[startIndex];
+        
+        // Remove the start cell from the array
+        emptyCells.splice(startIndex, 1);
+        
+        // Randomly select goal position from remaining empty cells
+        // Make sure goal is at least 3 cells away from start
+        let validGoalCells = emptyCells.filter(cell => {
+            const distance = Math.abs(cell.x - startCell.x) + Math.abs(cell.y - startCell.y);
+            return distance > 3; // Manhattan distance > 3
+        });
+        
+        // If no valid goal cells found, use any remaining empty cell
+        if (validGoalCells.length === 0) {
+            validGoalCells = emptyCells;
+        }
+        
+        const goalCell = validGoalCells[Math.floor(Math.random() * validGoalCells.length)];
+        
+        // Store these positions for reuse
+        window.startPosition = {
+            x: startCell.x * CELL_SIZE - (mazeData[0].length * CELL_SIZE) / 2 + CELL_SIZE / 2,
+            z: startCell.y * CELL_SIZE - (mazeData.length * CELL_SIZE) / 2 + CELL_SIZE / 2
+        };
+        
+        window.goalPosition = {
+            x: goalCell.x * CELL_SIZE - (mazeData[0].length * CELL_SIZE) / 2 + CELL_SIZE / 2,
+            z: goalCell.y * CELL_SIZE - (mazeData.length * CELL_SIZE) / 2 + CELL_SIZE / 2
+        };
+    }
+    
+    // Set player start position using the stored position
+    player.position.x = window.startPosition.x;
+    player.position.z = window.startPosition.z;
     player.position.y = PLAYER_RADIUS;
     
-    // Set goal position
-    goalMarker.position.x = (mazeData[0].length - 2) * CELL_SIZE - (mazeData[0].length * CELL_SIZE) / 2 + CELL_SIZE / 2;
-    goalMarker.position.z = (mazeData.length - 2) * CELL_SIZE - (mazeData.length * CELL_SIZE) / 2 + CELL_SIZE / 2;
+    // Set goal position using the stored position
+    goalMarker.position.x = window.goalPosition.x;
+    goalMarker.position.z = window.goalPosition.z;
 }
 
 /**
@@ -361,18 +432,23 @@ function startLevel(level, regenerateMaze = true) {
     const ambientLights = scene.children.filter(child => child instanceof THREE.AmbientLight);
     const directionalLights = scene.children.filter(child => child instanceof THREE.DirectionalLight);
     
+    // Reset scene background to sky blue for normal levels
+    scene.background = new THREE.Color(0x87CEEB);
+    
     // Every 5th level is pitch black (but only after completing at least 3 levels)
     if (completedLevels >= 3 && level % 5 === 0) {
         // Pitch black level - almost no ambient or directional light
-        ambientLights.forEach(light => light.intensity = 0.05);
-        directionalLights.forEach(light => light.intensity = 0.1);
+        ambientLights.forEach(light => light.intensity = 0.01);
+        directionalLights.forEach(light => light.intensity = 0.05);
         // Very strong player light
-        playerLight.intensity = 2.5;
-        playerLight.distance = 10;
+        playerLight.intensity = 3.5;
+        playerLight.distance = 12;
         playerLight.color.set(0xFFBB33); // Warmer light color
         
-        // Fog for even more atmosphere in pitch black levels
-        scene.fog.density = 0.15;
+        // Reduce fog to allow for true darkness
+        scene.fog.density = 0.04;
+        // Change scene background to black for true darkness
+        scene.background = new THREE.Color(0x000000);
     } 
     // Odd levels are darker
     else if (level % 2 === 1) {
