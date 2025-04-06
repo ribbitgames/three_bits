@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Subrunner</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="game-container">
+        <div id="loading-screen">
+            <div class="loader"></div>
+            <p>Loading Subrunner...</p>
+        </div>
+        <div id="start-screen">
+            <h1>SUBRUNNER</h1>
+            <div id="character-select">
+                <div id="default-character" class="character-box">
+                    <span>JAKE</span>
+                </div>
+            </div>
+            <button id="start-button">START GAME</button>
+            <p class="instructions">Tap on a lane to move there<br>
+            Swipe up to jump<br>
+            Tap your current lane to jump</p>
+        </div>
+        <div id="game-ui">
+            <div id="score-container">
+                <span id="score">0</span>
+                <span id="coin-count">0</span>
+                <span id="coin-icon">🪙</span>
+            </div>
+            <div id="powerup-indicator"></div>
+        </div>
+        <div id="game-over">
+            <h2>GAME OVER</h2>
+            <p>Score: <span id="final-score">0</span></p>
+            <p>Coins: <span id="final-coins">0</span></p>
+            <button id="restart-button">TRY AGAIN</button>
+        </div>
+    </div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="game.js"></script>
+</body>
+</html>
