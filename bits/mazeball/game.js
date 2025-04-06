@@ -11,11 +11,12 @@ const PLAYER_RADIUS = 0.3; // Player collision radius
 const LEVELS = 5; // Total number of levels
 
 // Game state variables
-let scene, camera, renderer, player, goalMarker;
+let scene, camera, renderer, player, goalMarker, goalParticles, playerLight;
 let mazeCells = [];
 let mazeWidth = 5; // Starting maze width
 let mazeHeight = 5; // Starting maze height
 let currentLevel = 1;
+let completedLevels = 0; // Track how many levels the player has completed
 let startTime;
 let isGameRunning = false;
 let isLevelComplete = false;
@@ -25,6 +26,8 @@ let targetX, targetZ; // Target position for continuous movement
 let isMoving = false; // Flag to track if player is moving
 let isMouseDown = false; // Track if mouse is being held down
 let mouseDirection = { x: 0, z: 0 }; // Direction of mouse movement
+let animationTime = 0; // For animations
+let currentMazeData = null; // Store current maze data for restarting levels
 
 // DOM elements
 const levelNumber = document.getElementById('level-number');
@@ -39,6 +42,9 @@ function init() {
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0x87CEEB); // Sky blue background
     
+    // Add fog for atmosphere and distance perception
+    scene.fog = new THREE.FogExp2(0x87CEEB, 0.02);
+    
     // Setup camera for top-down view
     camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
     camera.position.y = 10;
@@ -48,6 +54,7 @@ function init() {
     renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('game-canvas'), antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     
     // Add lighting
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
@@ -56,30 +63,101 @@ function init() {
     const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
     directionalLight.position.set(10, 20, 10);
     directionalLight.castShadow = true;
+    directionalLight.shadow.mapSize.width = 1024;
+    directionalLight.shadow.mapSize.height = 1024;
+    directionalLight.shadow.camera.near = 0.5;
+    directionalLight.shadow.camera.far = 50;
+    directionalLight.shadow.camera.left = -20;
+    directionalLight.shadow.camera.right = 20;
+    directionalLight.shadow.camera.top = 20;
+    directionalLight.shadow.camera.bottom = -20;
     scene.add(directionalLight);
     
-    // Add ground
+    // Add point light at player position
+    playerLight = new THREE.PointLight(0xFF9900, 1, 6);
+    playerLight.castShadow = true;
+    scene.add(playerLight);
+    
+    // Add ground with material
     const groundGeometry = new THREE.PlaneGeometry(100, 100);
-    const groundMaterial = new THREE.MeshStandardMaterial({ color: 0x4A7023 });
+    const groundMaterial = new THREE.MeshStandardMaterial({ 
+        color: 0x4A7023,
+        roughness: 0.8,
+        metalness: 0.2
+    });
+    
+    // Add a checkerboard pattern
+    const gridSize = 20;
+    const gridSegments = 100;
+    const gridGeometry = new THREE.PlaneGeometry(gridSize * 2, gridSize * 2, gridSegments, gridSegments);
+    const gridMaterial = new THREE.MeshStandardMaterial({
+        color: 0x4A7023,
+        roughness: 0.7,
+        metalness: 0.1,
+        wireframe: false
+    });
+    
+    // Create grid lines
+    const lineGeometry = new THREE.EdgesGeometry(new THREE.PlaneGeometry(gridSize * 2, gridSize * 2, 20, 20));
+    const lineMaterial = new THREE.LineBasicMaterial({ color: 0x5A8033, linewidth: 1 });
+    const gridLines = new THREE.LineSegments(lineGeometry, lineMaterial);
+    gridLines.rotation.x = -Math.PI / 2;
+    gridLines.position.y = 0.01; // Slightly above ground to avoid z-fighting
+    scene.add(gridLines);
+    
     const ground = new THREE.Mesh(groundGeometry, groundMaterial);
     ground.rotation.x = -Math.PI / 2;
     ground.receiveShadow = true;
     scene.add(ground);
     
-    // Create player
+    // Create player with glow effect
     const playerGeometry = new THREE.SphereGeometry(PLAYER_RADIUS, 32, 32);
-    const playerMaterial = new THREE.MeshStandardMaterial({ color: 0xFF5500 });
+    const playerMaterial = new THREE.MeshStandardMaterial({ 
+        color: 0xFF5500,
+        emissive: 0xFF5500,
+        emissiveIntensity: 0.2,
+        metalness: 0.8,
+        roughness: 0.2
+    });
     player = new THREE.Mesh(playerGeometry, playerMaterial);
     player.castShadow = true;
     player.position.y = PLAYER_RADIUS;
     scene.add(player);
     
-    // Create goal marker
+    // Create goal marker with animation
     const goalGeometry = new THREE.CylinderGeometry(0.5, 0.5, 0.1, 32);
-    const goalMaterial = new THREE.MeshStandardMaterial({ color: 0x00FF00, emissive: 0x00FF00, emissiveIntensity: 0.5 });
+    const goalMaterial = new THREE.MeshStandardMaterial({ 
+        color: 0x00FF00, 
+        emissive: 0x00FF00, 
+        emissiveIntensity: 0.5,
+        transparent: true,
+        opacity: 0.8
+    });
     goalMarker = new THREE.Mesh(goalGeometry, goalMaterial);
     goalMarker.position.y = 0.05;
     scene.add(goalMarker);
+    
+    // Create particles for goal marker
+    const particleGeometry = new THREE.BufferGeometry();
+    const particleCount = 50;
+    const posArray = new Float32Array(particleCount * 3);
+    
+    for (let i = 0; i < particleCount * 3; i++) {
+        posArray[i] = (Math.random() - 0.5) * 2;
+    }
+    
+    particleGeometry.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
+    const particleMaterial = new THREE.PointsMaterial({
+        size: 0.05,
+        color: 0x00ff00,
+        transparent: true,
+        opacity: 0.8,
+        blending: THREE.AdditiveBlending
+    });
+    
+    goalParticles = new THREE.Points(particleGeometry, particleMaterial);
+    goalParticles.position.y = 0.5;
+    goalMarker.add(goalParticles);
     
     // Event listeners
     window.addEventListener('resize', onWindowResize);
@@ -90,8 +168,12 @@ function init() {
     document.addEventListener('touchend', onTouchEnd);
     document.addEventListener('touchmove', onTouchMove);
     
+    // Reset game values
+    currentMazeData = null;
+    completedLevels = 0;
+    
     // Start the first level
-    startLevel(currentLevel);
+    startLevel(currentLevel, true);
     
     // Start animation loop
     animate();
@@ -178,14 +260,35 @@ function buildMaze(mazeData) {
     mazeCells.forEach(cell => scene.remove(cell));
     mazeCells = [];
     
-    // Wall geometry and material
+    // Wall geometry and materials
     const wallGeometry = new THREE.BoxGeometry(CELL_SIZE, WALL_HEIGHT, CELL_SIZE);
-    const wallMaterial = new THREE.MeshStandardMaterial({ color: 0x808080 });
+    
+    // Create multiple materials for varied wall appearance
+    const wallMaterials = [
+        new THREE.MeshStandardMaterial({ 
+            color: 0x8B4513, // Brown
+            roughness: 0.7,
+            metalness: 0.1
+        }),
+        new THREE.MeshStandardMaterial({ 
+            color: 0x964B00, // Slightly different brown
+            roughness: 0.8,
+            metalness: 0.05
+        }),
+        new THREE.MeshStandardMaterial({ 
+            color: 0x7D4427, // Yet another brown
+            roughness: 0.6,
+            metalness: 0.15
+        })
+    ];
     
     // Create walls
     for (let y = 0; y < mazeData.length; y++) {
         for (let x = 0; x < mazeData[y].length; x++) {
             if (mazeData[y][x] === 1) {
+                // Select random material for variety
+                const wallMaterial = wallMaterials[Math.floor(Math.random() * wallMaterials.length)];
+                
                 const wall = new THREE.Mesh(wallGeometry, wallMaterial);
                 wall.position.set(
                     x * CELL_SIZE - (mazeData[y].length * CELL_SIZE) / 2 + CELL_SIZE / 2,
@@ -202,6 +305,9 @@ function buildMaze(mazeData) {
     
     // Reset player
     player.material.color.set(0xFF5500); // Reset player color
+    player.material.emissive.set(0xFF5500);
+    player.material.emissiveIntensity = 0.2;
+    player.visible = true; // Make sure player is visible
     
     // Set player start position
     player.position.x = 1 * CELL_SIZE - (mazeData[0].length * CELL_SIZE) / 2 + CELL_SIZE / 2;
@@ -216,22 +322,30 @@ function buildMaze(mazeData) {
 /**
  * Start a new level
  * @param {number} level - Level number
+ * @param {boolean} regenerateMaze - Whether to generate a new maze or reuse existing one
  */
-function startLevel(level) {
+function startLevel(level, regenerateMaze = true) {
     // Update level display
     currentLevel = level;
     levelNumber.textContent = level;
     
     // Clear game message
     gameMessage.textContent = '';
+    gameMessage.style.display = 'none';
     
     // Calculate maze size based on level (increases with level)
     mazeWidth = 5 + (level * 2);
     mazeHeight = 5 + (level * 2);
     
     // Generate and build maze
-    const mazeData = generateMaze(mazeWidth, mazeHeight);
-    buildMaze(mazeData);
+    if (regenerateMaze || currentMazeData === null) {
+        // Store the new maze data
+        currentMazeData = generateMaze(mazeWidth, mazeHeight);
+        console.log("New maze generated");
+    } else {
+        console.log("Reusing existing maze");
+    }
+    buildMaze(currentMazeData);
     
     // Reset game state
     isGameRunning = true;
@@ -242,6 +356,42 @@ function startLevel(level) {
     // Center camera on player
     camera.position.x = player.position.x;
     camera.position.z = player.position.z;
+    
+    // Adjust lighting based on level and completion progress
+    const ambientLights = scene.children.filter(child => child instanceof THREE.AmbientLight);
+    const directionalLights = scene.children.filter(child => child instanceof THREE.DirectionalLight);
+    
+    // Every 5th level is pitch black (but only after completing at least 3 levels)
+    if (completedLevels >= 3 && level % 5 === 0) {
+        // Pitch black level - almost no ambient or directional light
+        ambientLights.forEach(light => light.intensity = 0.05);
+        directionalLights.forEach(light => light.intensity = 0.1);
+        // Very strong player light
+        playerLight.intensity = 2.5;
+        playerLight.distance = 10;
+        playerLight.color.set(0xFFBB33); // Warmer light color
+        
+        // Fog for even more atmosphere in pitch black levels
+        scene.fog.density = 0.15;
+    } 
+    // Odd levels are darker
+    else if (level % 2 === 1) {
+        ambientLights.forEach(light => light.intensity = 0.2);
+        directionalLights.forEach(light => light.intensity = 0.4);
+        playerLight.intensity = 1.5;
+        playerLight.distance = 8;
+        playerLight.color.set(0xFF9900); // Reset to original color
+        scene.fog.density = 0.02; // Reset fog
+    } 
+    // Even levels are brighter
+    else {
+        ambientLights.forEach(light => light.intensity = 0.5);
+        directionalLights.forEach(light => light.intensity = 0.8);
+        playerLight.intensity = 1.0;
+        playerLight.distance = 6;
+        playerLight.color.set(0xFF9900); // Reset to original color
+        scene.fog.density = 0.02; // Reset fog
+    }
 }
 
 /**
@@ -265,11 +415,127 @@ function levelComplete() {
     isLevelComplete = true;
     isGameRunning = false;
     
+    // Increment completed levels counter
+    completedLevels++;
+    
+    // Reset current maze data so a new maze will be generated for next level
+    currentMazeData = null;
+    
+    // Create completion effect
+    createCompletionEffect();
+    
     if (currentLevel < LEVELS) {
         gameMessage.textContent = `Level ${currentLevel} Complete! Tap to continue`;
     } else {
         gameMessage.textContent = 'Congratulations! You completed all levels! Tap to restart';
     }
+    
+    // Center the message
+    centerGameMessage();
+}
+
+/**
+ * Center the game message on screen
+ */
+function centerGameMessage() {
+    // First reset any existing styles
+    gameMessage.style = '';
+    
+    // Then apply new styles
+    gameMessage.style.position = 'fixed'; // Use fixed instead of absolute for better centering
+    gameMessage.style.top = '50%';
+    gameMessage.style.left = '50%';
+    gameMessage.style.transform = 'translate(-50%, -50%)';
+    gameMessage.style.display = 'inline-block'; // Make the background fit the text
+    gameMessage.style.backgroundColor = 'rgba(0, 0, 0, 0.85)';
+    gameMessage.style.color = 'white';
+    gameMessage.style.padding = '15px 25px';
+    gameMessage.style.borderRadius = '8px';
+    gameMessage.style.fontWeight = 'bold';
+    gameMessage.style.fontSize = '28px';
+    gameMessage.style.textAlign = 'center';
+    gameMessage.style.maxWidth = '80%';
+    gameMessage.style.zIndex = '1000';
+    gameMessage.style.border = '2px solid rgba(255, 255, 255, 0.3)';
+    gameMessage.style.boxShadow = '0 0 20px rgba(0, 0, 0, 0.5)';
+}
+
+/**
+ * Create level completion effect
+ */
+function createCompletionEffect() {
+    // Create ring of particles around player
+    const particleCount = 80;
+    const completionGeometry = new THREE.BufferGeometry();
+    const completionParticles = new Float32Array(particleCount * 3);
+    const completionColors = new Float32Array(particleCount * 3);
+    
+    // Generate particles in a ring
+    for (let i = 0; i < particleCount; i++) {
+        const angle = (i / particleCount) * Math.PI * 2;
+        const radius = 1.5;
+        
+        const i3 = i * 3;
+        completionParticles[i3] = Math.cos(angle) * radius;
+        completionParticles[i3 + 1] = 0.2;
+        completionParticles[i3 + 2] = Math.sin(angle) * radius;
+        
+        // Golden color
+        completionColors[i3] = 1.0;
+        completionColors[i3 + 1] = 0.8 + Math.random() * 0.2;
+        completionColors[i3 + 2] = 0.0;
+    }
+    
+    completionGeometry.setAttribute('position', new THREE.BufferAttribute(completionParticles, 3));
+    completionGeometry.setAttribute('color', new THREE.BufferAttribute(completionColors, 3));
+    
+    const completionMaterial = new THREE.PointsMaterial({
+        size: 0.1,
+        vertexColors: true,
+        blending: THREE.AdditiveBlending,
+        transparent: true,
+        depthWrite: false
+    });
+    
+    const completionEffect = new THREE.Points(completionGeometry, completionMaterial);
+    completionEffect.position.copy(player.position);
+    scene.add(completionEffect);
+    
+    // Animate completion effect
+    const effectDuration = 2.0; // seconds
+    const startTime = Date.now();
+    
+    function animateCompletionEffect() {
+        const elapsed = (Date.now() - startTime) / 1000;
+        const progress = elapsed / effectDuration;
+        
+        if (progress >= 1.0) {
+            scene.remove(completionEffect);
+            return;
+        }
+        
+        // Update particle positions
+        const positions = completionEffect.geometry.attributes.position.array;
+        
+        for (let i = 0; i < particleCount; i++) {
+            const i3 = i * 3;
+            const angle = (i / particleCount) * Math.PI * 2 + progress * Math.PI;
+            const radius = 1.5 + progress * 2;
+            
+            positions[i3] = Math.cos(angle) * radius;
+            positions[i3 + 1] = 0.2 + progress * 3;
+            positions[i3 + 2] = Math.sin(angle) * radius;
+        }
+        
+        completionEffect.geometry.attributes.position.needsUpdate = true;
+        
+        // Fade out opacity
+        completionMaterial.opacity = 1.0 - progress;
+        
+        requestAnimationFrame(animateCompletionEffect);
+    }
+    
+    animateCompletionEffect();
 }
 
 /**
@@ -376,9 +642,124 @@ function playerDeath() {
     
     // Change player color to red to indicate death
     player.material.color.set(0xFF0000);
+    player.material.emissive.set(0xFF0000);
+    player.material.emissiveIntensity = 0.5;
     
-    // Show message
+    // Create explosion effect
+    createExplosionEffect(player.position.x, player.position.z);
+    
+    // Make player disappear after a short delay
+    setTimeout(() => {
+        player.visible = false;
+    }, 300);
+    
+    // Show message in center of screen
     gameMessage.textContent = 'You died! Tap to restart level';
+    gameMessage.style.display = 'block'; // Ensure it's visible
+    centerGameMessage();
+    
+    // Add slight camera shake effect
+    const shakeDuration = 500; // ms
+    const startTime = Date.now();
+    const originalCameraY = camera.position.y;
+    
+    function shakeCamera() {
+        const elapsed = Date.now() - startTime;
+        if (elapsed < shakeDuration) {
+            const intensity = 0.1 * (1 - elapsed / shakeDuration);
+            camera.position.y = originalCameraY + (Math.random() - 0.5) * intensity;
+            requestAnimationFrame(shakeCamera);
+        } else {
+            camera.position.y = originalCameraY;
+        }
+    }
+    
+    shakeCamera();
+    
+    // Debug log to verify maze data is preserved
+    console.log("Current maze data preserved for restart:", currentMazeData);
+}
+
+/**
+ * Create explosion particle effect at position
+ * @param {number} x - X position
+ * @param {number} z - Z position
+ */
+function createExplosionEffect(x, z) {
+    const particleCount = 100;
+    const explosionGeometry = new THREE.BufferGeometry();
+    const explosionParticles = new Float32Array(particleCount * 3);
+    const explosionColors = new Float32Array(particleCount * 3);
+    const explosionSizes = new Float32Array(particleCount);
+    
+    // Generate random positions, colors and sizes
+    for (let i = 0; i < particleCount; i++) {
+        const i3 = i * 3;
+        explosionParticles[i3] = 0;
+        explosionParticles[i3 + 1] = 0;
+        explosionParticles[i3 + 2] = 0;
+        
+        // Red to orange colors
+        explosionColors[i3] = 1.0;
+        explosionColors[i3 + 1] = Math.random() * 0.5;
+        explosionColors[i3 + 2] = 0;
+        
+        explosionSizes[i] = Math.random() * 0.05 + 0.05;
+    }
+    
+    explosionGeometry.setAttribute('position', new THREE.BufferAttribute(explosionParticles, 3));
+    explosionGeometry.setAttribute('color', new THREE.BufferAttribute(explosionColors, 3));
+    explosionGeometry.setAttribute('size', new THREE.BufferAttribute(explosionSizes, 1));
+    
+    const explosionMaterial = new THREE.PointsMaterial({
+        size: 0.1,
+        vertexColors: true,
+        blending: THREE.AdditiveBlending,
+        transparent: true,
+        depthWrite: false
+    });
+    
+    const explosion = new THREE.Points(explosionGeometry, explosionMaterial);
+    explosion.position.set(x, PLAYER_RADIUS, z);
+    scene.add(explosion);
+    
+    // Animate explosion
+    const explosionDuration = 1.0; // seconds
+    const startTime = Date.now();
+    
+    function animateExplosion() {
+        const elapsed = (Date.now() - startTime) / 1000;
+        const progress = elapsed / explosionDuration;
+        
+        if (progress >= 1.0) {
+            scene.remove(explosion);
+            return;
+        }
+        
+        // Update particle positions
+        const positions = explosion.geometry.attributes.position.array;
+        
+        for (let i = 0; i < particleCount; i++) {
+            const i3 = i * 3;
+            
+            // Random direction
+            const angle = Math.random() * Math.PI * 2;
+            const radius = progress * 3.0;
+            
+            positions[i3] = Math.cos(angle) * radius * Math.random();
+            positions[i3 + 1] = progress * 2.0;
+            positions[i3 + 2] = Math.sin(angle) * radius * Math.random();
+        }
+        
+        explosion.geometry.attributes.position.needsUpdate = true;
+        
+        // Fade out opacity
+        explosionMaterial.opacity = 1.0 - progress;
+        
+        requestAnimationFrame(animateExplosion);
+    }
+    
+    animateExplosion();
 }
 
 /**
@@ -387,18 +768,25 @@ function playerDeath() {
  */
 function onMouseDown(event) {
     if (isLevelComplete) {
+        // Hide game message
+        gameMessage.style.display = 'none';
+        
         // Go to next level or restart game
         if (currentLevel < LEVELS) {
-            startLevel(currentLevel + 1);
+            startLevel(currentLevel + 1, true); // Generate new maze
         } else {
-            startLevel(1);
+            completedLevels = 0; // Reset completed levels counter when restarting
+            startLevel(1, true); // Generate new maze
         }
         return;
     }
     
     if (isDead) {
-        // Restart current level
-        startLevel(currentLevel);
+        // Hide game message
+        gameMessage.style.display = 'none';
+        
+        // Restart current level without generating a new maze
+        startLevel(currentLevel, false);
         return;
     }
     
@@ -475,18 +863,25 @@ function onTouchStart(event) {
     event.preventDefault();
     
     if (isLevelComplete) {
+        // Hide game message
+        gameMessage.style.display = 'none';
+        
         // Go to next level or restart game
         if (currentLevel < LEVELS) {
-            startLevel(currentLevel + 1);
+            startLevel(currentLevel + 1, true); // Generate new maze
         } else {
-            startLevel(1);
+            completedLevels = 0; // Reset completed levels counter when restarting
+            startLevel(1, true); // Generate new maze
         }
         return;
     }
     
     if (isDead) {
-        // Restart current level
-        startLevel(currentLevel);
+        // Hide game message
+        gameMessage.style.display = 'none';
+        
+        // Restart current level without generating a new maze
+        startLevel(currentLevel, false);
         return;
     }
     
@@ -556,6 +951,9 @@ function updateTouchDirection(event) {
 function animate() {
     requestAnimationFrame(animate);
     
+    // Update animation time
+    animationTime += 0.016;
+    
     // Update timer
     if (isGameRunning) {
         const elapsed = Math.floor((Date.now() - startTime) / 1000);
@@ -568,6 +966,37 @@ function animate() {
         // Update player position if moving to target
         else if (isMoving) {
             updatePlayerPosition();
+        }
+        
+        // Update player light position
+        playerLight.position.copy(player.position);
+        playerLight.position.y = PLAYER_RADIUS * 2;
+        
+        // Animate goal marker
+        if (goalMarker) {
+            goalMarker.rotation.y += 0.02;
+            goalMarker.position.y = 0.05 + Math.sin(animationTime * 2) * 0.05;
+            
+            // Animate goal particles
+            if (goalParticles) {
+                goalParticles.rotation.y += 0.01;
+                goalParticles.rotation.x += 0.005;
+                
+                // Move particles in circular pattern
+                const particles = goalParticles.geometry.attributes.position.array;
+                for (let i = 0; i < particles.length; i += 3) {
+                    const x = particles[i];
+                    const z = particles[i + 2];
+                    const angle = Math.atan2(z, x) + 0.01;
+                    const radius = Math.sqrt(x * x + z * z);
+                    
+                    particles[i] = Math.cos(angle) * radius;
+                    particles[i + 1] = Math.sin(animationTime * 3 + i/3) * 0.2;
+                    particles[i + 2] = Math.sin(angle) * radius;
+                }
+                
+                goalParticles.geometry.attributes.position.needsUpdate = true;
+            }
         }
     }
     
