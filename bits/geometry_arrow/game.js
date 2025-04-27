@@ -162,6 +162,13 @@ function createObstacle() {
     });
 }
 
+// Add touch device detection
+function isTouchDevice() {
+    return (('ontouchstart' in window) ||
+        (navigator.maxTouchPoints > 0) ||
+        (navigator.msMaxTouchPoints > 0));
+}
+
 // Handle input
 function handleInput(e) {
     if (e.type === 'keydown' && e.code === 'Space') {
@@ -177,8 +184,10 @@ function handleInput(e) {
 }
 
 // Touch/mouse events
-canvas.addEventListener('mousedown', () => {
-    if (!gameOver) {
+canvas.addEventListener('mousedown', (e) => {
+    if (gameOver) {
+        resetGame();
+    } else {
         arrow.rotation = -45;
     }
 });
@@ -191,7 +200,9 @@ canvas.addEventListener('mouseup', () => {
 
 canvas.addEventListener('touchstart', (e) => {
     e.preventDefault();
-    if (!gameOver) {
+    if (gameOver) {
+        resetGame();
+    } else {
         arrow.rotation = -45;
     }
 });
@@ -459,7 +470,8 @@ function draw() {
         ctx.textAlign = 'center';
         ctx.fillText('Game Over!', canvas.width / 2, canvas.height / 2);
         ctx.font = '20px Arial';
-        ctx.fillText('Press Space to Restart', canvas.width / 2, canvas.height / 2 + 40);
+        const restartText = 'Press to Restart';
+        ctx.fillText(restartText, canvas.width / 2, canvas.height / 2 + 40);
     }
 }
 
