@@ -11,13 +11,14 @@ const INITIAL_BALL_SPEED = 5/3;  // One third of original speed
 const BALL_SPEED_INCREASE = 1.03;  // 3% increase on each hit
 const MAX_SCORE = 5;
 
-// This is a test.
-
-// Table dimensions
+// Table dimensions (these will be our reference dimensions)
 const TABLE_WIDTH = 800;
 const TABLE_HEIGHT = 600;
 const TABLE_DEPTH = 20;
 const NET_HEIGHT = 40;
+
+// Aspect ratio for scaling
+const ASPECT_RATIO = TABLE_WIDTH / TABLE_HEIGHT;
 
 // Game state
 let score = { player1: 0, player2: 0 };
@@ -25,6 +26,11 @@ let currentBallSpeed = INITIAL_BALL_SPEED;
 let ballVelocity = new THREE.Vector3(INITIAL_BALL_SPEED, INITIAL_BALL_SPEED, 0);
 let keys = {};
 let gameActive = true;
+let currentScreenWidth = window.innerWidth;
+let currentScreenHeight = window.innerHeight;
+let player1ScoreMesh;
+let player2ScoreMesh;
+let scoreFont; // Store font reference
 
 // Array of emojis
 const EMOJIS = ['⚽', '🎾', '🏀', '🏈', '⭐', '🎯', '🌟', '🔮'];
@@ -53,9 +59,75 @@ camera.lookAt(0, 0, 0);
 
 // Setup renderer
 const renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.setSize(TABLE_WIDTH, TABLE_HEIGHT);
+updateGameSize();
 renderer.shadowMap.enabled = true;
-document.getElementById('game-container').appendChild(renderer.domElement);
+
+// Setup game container styles
+const container = document.getElementById('game-container');
+container.style.position = 'fixed';
+container.style.top = '0';
+container.style.left = '0';
+container.style.width = '100%';
+container.style.height = '100%';
+container.style.display = 'flex';
+container.style.justifyContent = 'center';
+container.style.alignItems = 'center';
+container.style.overflow = 'hidden';
+
+document.body.style.margin = '0';
+document.body.style.padding = '0';
+document.body.style.overflow = 'hidden';
+
+// Add meta viewport tag if not present
+if (!document.querySelector('meta[name="viewport"]')) {
+    const meta = document.createElement('meta');
+    meta.name = 'viewport';
+    meta.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no';
+    document.head.appendChild(meta);
+}
+
+container.appendChild(renderer.domElement);
+
+// Add resize handler
+window.addEventListener('resize', updateGameSize);
+
+// Function to update game size
+function updateGameSize() {
+    currentScreenWidth = window.innerWidth;
+    currentScreenHeight = window.innerHeight;
+    
+    // Get the game container
+    const container = document.getElementById('game-container');
+    
+    // Calculate new dimensions while maintaining aspect ratio
+    let newWidth, newHeight;
+    
+    if (window.innerWidth / window.innerHeight > ASPECT_RATIO) {
+        // Window is wider than game aspect ratio
+        newHeight = Math.min(window.innerHeight, TABLE_HEIGHT);
+        newWidth = newHeight * ASPECT_RATIO;
+    } else {
+        // Window is taller than game aspect ratio
+        newWidth = Math.min(window.innerWidth, TABLE_WIDTH);
+        newHeight = newWidth / ASPECT_RATIO;
+    }
+    
+    // Update renderer size
+    renderer.setSize(newWidth, newHeight);
+    
+    // Update camera
+    const scale = newHeight / TABLE_HEIGHT;
+    camera.left = (TABLE_WIDTH / -2) * scale;
+    camera.right = (TABLE_WIDTH / 2) * scale;
+    camera.top = (TABLE_HEIGHT / 2) * scale;
+    camera.bottom = (TABLE_HEIGHT / -2) * scale;
+    camera.updateProjectionMatrix();
+    
+    // Center the game container
+    container.style.width = `${newWidth}px`;
+    container.style.height = `${newHeight}px`;
+    container.style.margin = 'auto';
+}
 
 // Create table surface
 const tableGeometry = new THREE.BoxGeometry(TABLE_WIDTH, TABLE_HEIGHT, TABLE_DEPTH);
@@ -182,9 +254,107 @@ window.addEventListener('keydown', (e) => keys[e.key] = true);
 window.addEventListener('keyup', (e) => keys[e.key] = false);
 document.getElementById('play-again').addEventListener('click', resetGame);
 
-// Update score display
+// Touch controls state
+let touchControls = {
+    paddle1Moving: 0,  // -1 for down, 1 for up, 0 for not moving
+    paddle2Moving: 0
+};
+
+// Add touch event listeners
+renderer.domElement.addEventListener('touchstart', handleTouch);
+renderer.domElement.addEventListener('touchmove', handleTouch);
+renderer.domElement.addEventListener('touchend', () => {
+    touchControls.paddle1Moving = 0;
+    touchControls.paddle2Moving = 0;
+});
+
+function handleTouch(event) {
+    event.preventDefault(); // Prevent scrolling while playing
+    const canvas = renderer.domElement;
+    const rect = canvas.getBoundingClientRect();
+    const centerX = rect.width / 2;
+
+    // Handle all touch points
+    for (let i = 0; i < event.touches.length; i++) {
+        const touch = event.touches[i];
+        const touchX = touch.clientX - rect.left;
+        const touchY = touch.clientY - rect.top;
+
+        // Determine which half of the screen was touched
+        if (touchX < centerX) {
+            // Left paddle
+            touchControls.paddle1Moving = touchY < rect.height / 2 ? 1 : -1;
+        } else {
+            // Right paddle
+            touchControls.paddle2Moving = touchY < rect.height / 2 ? 1 : -1;
+        }
+    }
+}
+
+// Create font loader
+const fontLoader = new FontLoader();
+
+// Load font and create score meshes
+fontLoader.load('https://threejs.org/examples/fonts/helvetiker_regular.typeface.json', function(font) {
+    scoreFont = font; // Store the font for later use
+    const textOptions = {
+        font: font,
+        size: 50,
+        height: 5,
+        curveSegments: 12,
+        bevelEnabled: false
+    };
+
+    // Create score meshes with initial "0"
+    function createScoreText(text) {
+        const textGeometry = new TextGeometry(text, textOptions);
+        textGeometry.computeBoundingBox();
+        const textMaterial = new THREE.MeshPhongMaterial({ color: 0xFFFFFF });
+        return new THREE.Mesh(textGeometry, textMaterial);
+    }
+
+    // Create initial score meshes
+    player1ScoreMesh = createScoreText('0');
+    player2ScoreMesh = createScoreText('0');
+
+    // Position score meshes
+    player1ScoreMesh.position.set(-100, TABLE_HEIGHT/3, 0);
+    player2ScoreMesh.position.set(50, TABLE_HEIGHT/3, 0);
+
+    scene.add(player1ScoreMesh);
+    scene.add(player2ScoreMesh);
+});
+
+// Function to update score display
 function updateScore() {
-    document.getElementById('score').textContent = `Player 1: ${score.player1} | Player 2: ${score.player2}`;
+    if (!player1ScoreMesh || !player2ScoreMesh || !scoreFont) return;
+
+    // Create new score meshes with updated scores
+    const textOptions = {
+        font: scoreFont,
+        size: 50,
+        height: 5,
+        curveSegments: 12,
+        bevelEnabled: false
+    };
+
+    // Update score geometries
+    if (player1ScoreMesh.geometry) {
+        player1ScoreMesh.geometry.dispose();
+    }
+    if (player2ScoreMesh.geometry) {
+        player2ScoreMesh.geometry.dispose();
+    }
+    
+    const geometry1 = new TextGeometry(score.player1.toString(), textOptions);
+    const geometry2 = new TextGeometry(score.player2.toString(), textOptions);
+    
+    player1ScoreMesh.geometry = geometry1;
+    player2ScoreMesh.geometry = geometry2;
+
+    // Reposition scores
+    player1ScoreMesh.position.set(-100, TABLE_HEIGHT/3, 0);
+    player2ScoreMesh.position.set(50, TABLE_HEIGHT/3, 0);
 }
 
 // Show game over screen
@@ -228,17 +398,20 @@ function animate() {
 
     if (!gameActive) return;
 
-    // Paddle movement
-    if (keys['w'] && paddle1.position.y < 250) {
+    // Paddle movement - combine keyboard and touch controls
+    // Left paddle (Player 1)
+    if ((keys['w'] || touchControls.paddle1Moving > 0) && paddle1.position.y < 250) {
         paddle1.position.y += PADDLE_SPEED;
     }
-    if (keys['s'] && paddle1.position.y > -250) {
+    if ((keys['s'] || touchControls.paddle1Moving < 0) && paddle1.position.y > -250) {
         paddle1.position.y -= PADDLE_SPEED;
     }
-    if (keys['ArrowUp'] && paddle2.position.y < 250) {
+    
+    // Right paddle (Player 2)
+    if ((keys['ArrowUp'] || touchControls.paddle2Moving > 0) && paddle2.position.y < 250) {
         paddle2.position.y += PADDLE_SPEED;
     }
-    if (keys['ArrowDown'] && paddle2.position.y > -250) {
+    if ((keys['ArrowDown'] || touchControls.paddle2Moving < 0) && paddle2.position.y > -250) {
         paddle2.position.y -= PADDLE_SPEED;
     }
 
@@ -292,6 +465,12 @@ function animate() {
         score.player1++;
         updateScore();
         resetBall();
+    }
+
+    // Remove the old score display element if it exists
+    const oldScoreElement = document.getElementById('score');
+    if (oldScoreElement) {
+        oldScoreElement.remove();
     }
 
     // Check for game over
