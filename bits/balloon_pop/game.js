@@ -79,6 +79,24 @@ function initGame() {
     window.addEventListener('mousedown', onMouseDown);
     window.addEventListener('touchstart', onTouchStart, { passive: false });
     
+    // Add touch event listeners for the game container
+    const gameContainer = document.getElementById('game-container');
+    gameContainer.addEventListener('touchstart', onTouchStart, { passive: false });
+    gameContainer.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false });
+    
+    // Add both click and touch event listeners for buttons
+    startButton.addEventListener('click', startGame);
+    startButton.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        startGame();
+    });
+    
+    restartButton.addEventListener('click', startGame);
+    restartButton.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        startGame();
+    });
+    
     // Start the animation loop
     animate();
 }
@@ -300,6 +318,7 @@ function onTouchStart(event) {
     mouse.x = (touch.clientX / window.innerWidth) * 2 - 1;
     mouse.y = -(touch.clientY / window.innerHeight) * 2 + 1;
     
+    // Check for balloon collision
     checkBalloonCollision();
 }
 
@@ -521,15 +540,6 @@ function animate() {
     // Render the scene
     renderer.render(scene, camera);
 }
-
-// Event listeners for game buttons
-startButton.addEventListener('click', startGame);
-restartButton.addEventListener('click', () => {
-    gameOver.classList.remove('visible');
-    gameOver.classList.add('hidden');
-    gameMenu.classList.remove('hidden');
-    gameMenu.classList.add('visible');
-});
 
 // Initialize the game when the page loads
 initGame();
