@@ -101,8 +101,6 @@ function initGame() {
     animate();
 }
 
-// Test
-
 /**
  * Calculate the screen boundaries in 3D space
  */
