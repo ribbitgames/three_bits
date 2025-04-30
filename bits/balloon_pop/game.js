@@ -120,9 +120,6 @@ function calculateScreenBounds() {
     };
 }
 
-/**
- * Start a new game
- */
 function startGame() {
     // Reset game state
     score = 0;
