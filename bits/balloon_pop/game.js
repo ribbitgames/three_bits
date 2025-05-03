@@ -77,22 +77,20 @@ function initGame() {
     // Event listeners for window resize and mouse/touch interactions
     window.addEventListener('resize', onWindowResize);
     window.addEventListener('mousedown', onMouseDown);
-    window.addEventListener('touchstart', onTouchStart, { passive: false });
     
-    // Add touch event listeners for the game container
+    // Better touch event handling
     const gameContainer = document.getElementById('game-container');
     gameContainer.addEventListener('touchstart', onTouchStart, { passive: false });
-    gameContainer.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false });
     
-    // Add both click and touch event listeners for buttons
+    // Make sure buttons work on mobile 
     startButton.addEventListener('click', startGame);
-    startButton.addEventListener('touchstart', (e) => {
+    startButton.addEventListener('touchend', function(e) {
         e.preventDefault();
         startGame();
     });
     
     restartButton.addEventListener('click', startGame);
-    restartButton.addEventListener('touchstart', (e) => {
+    restartButton.addEventListener('touchend', function(e) {
         e.preventDefault();
         startGame();
     });
@@ -211,6 +209,15 @@ function createBalloon() {
     knot.position.y = -radius - radius * 0.15;
     balloonMesh.add(knot);
     
+    // Add invisible larger hitbox for better touch detection on mobile
+    const hitboxGeometry = new THREE.SphereGeometry(radius * 1.5, 8, 8);
+    const hitboxMaterial = new THREE.MeshBasicMaterial({ 
+        transparent: true, 
+        opacity: 0 
+    });
+    const hitbox = new THREE.Mesh(hitboxGeometry, hitboxMaterial);
+    balloonMesh.add(hitbox);
+    
     // Create balloon object with properties needed for game
     const balloon = {
         mesh: balloonMesh,
@@ -306,7 +313,10 @@ function onMouseDown(event) {
  * @param {Event} event - Touch event
  */
 function onTouchStart(event) {
-    event.preventDefault();
+    // Only prevent default if we're in the game
+    if (gameActive) {
+        event.preventDefault();
+    }
     
     // Use the first touch point
     const touch = event.touches[0];
@@ -334,7 +344,8 @@ function checkBalloonCollision() {
         .filter(balloon => !balloon.popped)
         .map(balloon => balloon.mesh);
     
-    // Check for intersections with a wider radius for more forgiving hit detection
+    // Use a slightly larger threshold for touch interfaces
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
     const intersects = raycaster.intersectObjects(balloonMeshes, true);
     
     if (intersects.length > 0) {
