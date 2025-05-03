@@ -31,6 +31,11 @@ let playerPosition = 1;
 let trackProgress = 0;
 let playerPositions = [];
 let carColors = [0xff0000, 0x00ff00, 0x0000ff, 0xffff00];
+let joystick = null;
+let joystickData = {
+    forward: 0,
+    turn: 0
+};
 
 // Event listeners for window resize
 window.addEventListener('resize', onWindowResize);
@@ -48,7 +53,7 @@ function init() {
     createPlayerCar();
     createAICars();
     createObstacles();
-    setupControls();
+    setupVirtualJoystick();
 
     // Set up the race
     document.getElementById('loading').style.display = 'none';
@@ -313,115 +318,139 @@ function createObstacles() {
 }
 
 /**
- * Set up controls (mouse/touch follow system) for isometric view
+ * Set up virtual joystick using nipplejs
  */
-function setupControls() {
-    // Track if input is active (mouse down/touch)
-    let isInputActive = false;
+function setupVirtualJoystick() {
+    // Make controls div visible
+    document.getElementById('controls').style.display = 'flex';
     
-    // Expose isInputActive to be used in updatePlayerCar
-    window.isInputActive = false;
+    // Position the joystick at the bottom of the screen
+    const joystickContainer = document.getElementById('joystick-zone');
+    joystickContainer.style.position = 'absolute';
+    joystickContainer.style.bottom = '20px';
+    joystickContainer.style.left = '20px';
+    joystickContainer.style.width = '120px';
+    joystickContainer.style.height = '120px';
+    joystickContainer.style.background = 'rgba(255, 255, 255, 0.3)';
+    joystickContainer.style.borderRadius = '50%';
+    joystickContainer.style.zIndex = '999';
+    joystickContainer.style.display = 'block';
     
-    renderer.domElement.addEventListener('mousedown', (event) => {
+    // Set up boost button
+    const boostButton = document.getElementById('boost-button');
+    boostButton.style.position = 'absolute';
+    boostButton.style.bottom = '20px';
+    boostButton.style.right = '20px';
+    boostButton.style.width = '80px';
+    boostButton.style.height = '80px';
+    boostButton.style.borderRadius = '50%';
+    boostButton.style.background = 'rgba(255, 0, 0, 0.6)';
+    boostButton.style.color = 'white';
+    boostButton.style.display = 'flex';
+    boostButton.style.justifyContent = 'center';
+    boostButton.style.alignItems = 'center';
+    boostButton.style.fontWeight = 'bold';
+    boostButton.style.zIndex = '999';
+    
+    // Initialize nipplejs
+    joystick = nipplejs.create({
+        zone: joystickContainer,
+        mode: 'static',
+        position: { left: '50%', top: '50%' },
+        color: 'rgba(255, 255, 255, 0.8)',
+        size: 100
+    });
+    
+    // Joystick event handlers
+    joystick.on('move', (event, data) => {
         if (!isRaceStarted || isRaceFinished) return;
-        isInputActive = true;
-        window.isInputActive = true;
-        // Apply immediate acceleration on click
-        speed += ACCELERATION * 5;
-        handleInput(event);
-    });
-    
-    renderer.domElement.addEventListener('mousemove', (event) => {
-        if (!isRaceStarted || isRaceFinished) return;
-        // Check actual mouse button state rather than just our flag
-        isInputActive = event.buttons === 1;
-        if (isInputActive) {
-            handleInput(event);
-        }
-    });
-    
-    renderer.domElement.addEventListener('mouseup', () => {
-        isInputActive = false;
-        window.isInputActive = false;
-        // No immediate deceleration - let friction handle it
-    });
-    
-    renderer.domElement.addEventListener('touchstart', (event) => {
-        if (!isRaceStarted || isRaceFinished) return;
-        isInputActive = true;
-        handleInput(event.touches[0]);
-        event.preventDefault();
-    });
-    
-    renderer.domElement.addEventListener('touchmove', (event) => {
-        if (!isRaceStarted || isRaceFinished) return;
-        handleInput(event.touches[0]);
-        event.preventDefault();
-    });
-    
-    renderer.domElement.addEventListener('touchend', () => {
-        isInputActive = false;
-        // Start decelerating when input stops
-        speed = Math.max(0, speed - DECELERATION);
-    });
-    
-    function handleInput(event) {
-        // Get normalized device coordinates
-        const rect = renderer.domElement.getBoundingClientRect();
-        const x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-        const y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
         
-        // Create a vector for raycasting
-        const vector = new THREE.Vector3(x, y, 0.5);
-        vector.unproject(camera);
+        // Get the input values normalized from -1 to 1
+        const angle = data.angle.radian;
+        const force = Math.min(1, data.force / 50); // Normalize force between 0 and 1
         
-        // Get direction and calculate intersection with ground plane
-        const dir = vector.sub(camera.position).normalize();
-        const planeNormal = new THREE.Vector3(0, 1, 0);
-        const planePoint = new THREE.Vector3(0, 0, 0);
+        // Forward/backward (y-axis)
+        joystickData.forward = Math.cos(angle - Math.PI/2) * force;
         
-        // Calculate ray-plane intersection
-        const denominator = planeNormal.dot(dir);
-        if (Math.abs(denominator) > 0.0001) {
-            const t = planeNormal.dot(planePoint.clone().sub(camera.position)) / denominator;
-            const pos = camera.position.clone().add(dir.clone().multiplyScalar(t));
-            
-            // Calculate angle between car and target position
-            const dx = pos.x - playerCar.position.x;
-            const dz = pos.z - playerCar.position.z;
-            
-            // Calculate target angle in isometric space
-            const targetAngle = Math.atan2(dx, dz);
-            
-            // Apply smooth rotation toward target
-            const angleDiff = normalizeAngle(targetAngle - playerCar.rotation.y);
-            playerCar.rotation.y += angleDiff * STEERING_SPEED;
-            
-            // Accelerate when input is active - apply full acceleration
-            speed = Math.min(MAX_SPEED, speed + ACCELERATION * 2);
-        }
-    }
+        // Left/right (x-axis)
+        joystickData.turn = Math.sin(angle - Math.PI/2) * force;
+    });
     
-    // Helper to normalize angle difference to -PI,PI range
-    function normalizeAngle(angle) {
-        while (angle > Math.PI) angle -= Math.PI * 2;
-        while (angle < -Math.PI) angle += Math.PI * 2;
-        return angle;
-    }
+    joystick.on('end', () => {
+        // Reset joystick data when released
+        joystickData.forward = 0;
+        joystickData.turn = 0;
+    });
+    
+    // Boost button functionality
+    let boostActive = false;
+    let boostTimeout = null;
+    let boostCooldownTimeout = null;
+    let boostAvailable = true;
+    
+    boostButton.addEventListener('click', () => {
+        if (!isRaceStarted || isRaceFinished || !boostAvailable) return;
+        
+        // Activate boost
+        boostActive = true;
+        boostAvailable = false;
+        
+        // Visual feedback
+        boostButton.style.backgroundColor = 'rgba(255, 0, 0, 0.3)';
+        
+        // Boost effect
+        speed *= 1.5;
+        
+        // Boost duration
+        boostTimeout = setTimeout(() => {
+            boostActive = false;
+            
+            // Cooldown period
+            boostCooldownTimeout = setTimeout(() => {
+                boostAvailable = true;
+                boostButton.style.backgroundColor = 'rgba(255, 0, 0, 0.6)';
+            }, 5000); // 5 second cooldown
+            
+        }, 2000); // 2 second boost duration
+    });
+    
+    // Add these variables to window for updatePlayerCar
+    window.boostActive = boostActive;
+    window.boostTimeout = boostTimeout;
+    window.boostCooldownTimeout = boostCooldownTimeout;
+    window.boostAvailable = boostAvailable;
 }
 
 /**
- * Update player car position and rotation
+ * Update player car position and rotation based on joystick input
  */
 function updatePlayerCar() {
-    // Apply friction only if not actively accelerating
-    if (!window.isInputActive) {
+    // Process joystick input
+    if (joystickData.forward !== 0) {
+        // Accelerate based on forward input
+        const acceleration = joystickData.forward > 0 ? 
+            ACCELERATION * joystickData.forward * 2 : // Forward
+            DECELERATION * Math.abs(joystickData.forward) * 2; // Backward/brake
+        
+        if (joystickData.forward > 0) {
+            // Accelerate forward
+            speed = Math.min(MAX_SPEED, speed + acceleration);
+        } else {
+            // Brake/reverse
+            speed = Math.max(0, speed - acceleration);
+        }
+    } else {
+        // Apply friction when no input
         speed *= FRICTION;
+    }
+    
+    // Apply steering from joystick
+    if (joystickData.turn !== 0) {
+        playerCar.rotation.y += joystickData.turn * STEERING_SPEED;
     }
     
     // Clamp speed
     speed = Math.max(0, Math.min(MAX_SPEED, speed));
-
     if (speed < 0.001) speed = 0; // Stop completely at very low speeds
     
     // Move along the direction the car is facing
@@ -431,19 +460,17 @@ function updatePlayerCar() {
     playerCar.position.x += moveX;
     playerCar.position.z += moveZ;
     
-    // Note: Removed car tilt code as it's now handled in handleInput
-    
     // Visual car body tilt effect during turning
     if (playerCar.carMesh) {
         // Reset tilt
         playerCar.carMesh.rotation.z = 0;
         
         // Apply tilt based on turning
-        const turnRate = Math.sin(playerCar.rotation.y) * speed * 5;
+        const turnRate = joystickData.turn * speed * 5;
         playerCar.carMesh.rotation.z = -turnRate * 0.2; // Tilt factor
     }
 
-    // Track boundary handling and lap counting logic remains unchanged
+    // Track boundary handling and lap counting logic
     const distanceFromCenter = Math.sqrt(
         playerCar.position.x * playerCar.position.x +
         playerCar.position.z * playerCar.position.z
@@ -522,10 +549,10 @@ function restartRace() {
         aiCars[i].lap = 1;
     }
 
-    if (boostTimeout) clearTimeout(boostTimeout);
-    if (boostCooldownTimeout) clearTimeout(boostCooldownTimeout);
-    boostActive = false;
-    boostAvailable = true;
+    if (window.boostTimeout) clearTimeout(window.boostTimeout);
+    if (window.boostCooldownTimeout) clearTimeout(window.boostCooldownTimeout);
+    window.boostActive = false;
+    window.boostAvailable = true;
     document.getElementById('boost-button').style.backgroundColor = 'rgba(255, 0, 0, 0.6)';
 
     startRace();
@@ -607,7 +634,7 @@ function checkCollisions() {
         if (distance < obstacle.userData.radius + 1.5) {
             if (obstacle.userData.type === 'oil') {
                 // Oil slick - lose control temporarily
-                steeringDirection = (Math.random() - 0.5) * 2;
+                joystickData.turn = (Math.random() - 0.5) * 2; // Random steering
                 speed *= 0.8;
             } else if (obstacle.userData.type === 'boost') {
                 // Boost pad - temporary speed boost

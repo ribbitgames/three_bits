@@ -37,11 +37,37 @@ body, html {
 }
 
 #controls {
-    display: none;
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    padding: 20px;
+    z-index: 50;
+}
+
+#joystick-zone {
+    position: relative;
+    width: 120px;
+    height: 120px;
+    background-color: rgba(255, 255, 255, 0.3);
+    border-radius: 50%;
 }
 
 #boost-button {
-    display: none;
+    width: 80px;
+    height: 80px;
+    background-color: rgba(255, 0, 0, 0.6);
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-weight: bold;
+    font-size: 14px;
+    touch-action: manipulation;
+    cursor: pointer;
 }
 
 #loading {
@@ -105,6 +131,7 @@ button:hover {
     margin: 20px 0;
 }
 
+/* Responsive adjustments */
 @media (orientation: landscape) {
     #controls {
         padding-bottom: 40px;
@@ -120,5 +147,6 @@ button:hover {
     #boost-button {
         width: 100px;
         height: 100px;
+        font-size: 16px;
     }
 }
