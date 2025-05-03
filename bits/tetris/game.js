@@ -92,12 +92,16 @@ function setupThreeJs() {
     // Create renderer
     renderer = new THREE.WebGLRenderer({ antialias: true });
     
-    // Determine the size based on screen orientation
+    // Determine the size based on screen orientation and available space
     let width, height;
     if (window.innerWidth < window.innerHeight) {
-        // Mobile portrait
-        width = Math.min(window.innerWidth * 0.9, BLOCK_SIZE * GRID_WIDTH);
-        height = (GRID_HEIGHT / GRID_WIDTH) * width;
+        // Mobile portrait - account for controls and score container
+        const controlsHeight = document.getElementById('controls').offsetHeight || 80;
+        const scoreHeight = document.getElementById('score-container').offsetHeight || 40;
+        const availableHeight = window.innerHeight - controlsHeight - scoreHeight - 40; // Add padding
+        
+        height = Math.min(availableHeight, BLOCK_SIZE * GRID_HEIGHT);
+        width = (GRID_WIDTH / GRID_HEIGHT) * height;
     } else {
         // Desktop or landscape
         height = Math.min(window.innerHeight * 0.7, BLOCK_SIZE * GRID_HEIGHT);
@@ -581,12 +585,16 @@ function handleKeyUp(event) {
  * Handle window resize events
  */
 function handleResize() {
-    // Determine the size based on screen orientation
+    // Determine the size based on screen orientation and available space
     let width, height;
     if (window.innerWidth < window.innerHeight) {
-        // Mobile portrait
-        width = Math.min(window.innerWidth * 0.9, BLOCK_SIZE * GRID_WIDTH);
-        height = (GRID_HEIGHT / GRID_WIDTH) * width;
+        // Mobile portrait - account for controls and score container
+        const controlsHeight = document.getElementById('controls').offsetHeight || 80;
+        const scoreHeight = document.getElementById('score-container').offsetHeight || 40;
+        const availableHeight = window.innerHeight - controlsHeight - scoreHeight - 40; // Add padding
+        
+        height = Math.min(availableHeight, BLOCK_SIZE * GRID_HEIGHT);
+        width = (GRID_WIDTH / GRID_HEIGHT) * height;
     } else {
         // Desktop or landscape
         height = Math.min(window.innerHeight * 0.7, BLOCK_SIZE * GRID_HEIGHT);

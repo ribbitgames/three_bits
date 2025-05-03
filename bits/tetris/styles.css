@@ -145,3 +145,20 @@ button:active {
         width: 60px;
     }
 }
+
+@media (max-width: 600px) {
+    body {
+        align-items: flex-start;
+        padding-top: 10px;
+    }
+    
+    #game-container {
+        height: calc(100vh - 20px);
+        justify-content: space-between;
+    }
+    
+    #canvas-container {
+        flex-shrink: 1;
+        min-height: 0;
+    }
+}
