@@ -21,6 +21,9 @@ const GAME_CONFIG = {
     BRICK_PADDING: 0.1,                // Space between bricks
     BRICK_HEIGHT: 0.4,                 // Height of each brick
     BRICK_DEPTH: 0.3,                  // Depth of each brick
+    SPECIAL_BRICK_CHANCE: 0.2,      // 20% chance for a special brick
+    MULTI_HIT_BRICK_COLOR: 0xFFD700, // Gold color for multi-hit bricks
+    EXTRA_BALL_BRICK_COLOR: 0x00FFFF, // Cyan color for extra ball bricks
 
     // Game mechanics
     STARTING_LIVES: 3,                 // Number of lives at game start
@@ -52,6 +55,7 @@ class BreakoutGame {
         this.gameStarted = false;
         this.gameOver = false;
         this.paused = false;
+        this.balls = [];
 
         // DOM elements
         this.initDOMElements();
@@ -255,6 +259,40 @@ class BreakoutGame {
         this.scene.add(this.ball);
     }
 
+    createExtraBall() {
+        // Clone the ball geometry and material
+        const ballGeometry = new THREE.SphereGeometry(this.ballRadius, 32, 32);
+        const ballMaterial = new THREE.MeshPhongMaterial({
+            color: GAME_CONFIG.BALL_COLOR,
+            specular: 0xffffff,
+            shininess: 100
+        });
+    
+        const newBall = new THREE.Mesh(ballGeometry, ballMaterial);
+    
+        // Position new ball close to where the original ball is
+        newBall.position.copy(this.ball.position);
+        // Slight offset to avoid exact overlap
+        newBall.position.x += this.ballRadius * 0.5;
+    
+        // Get current ball speed (clamped to maximum)
+        const clampedSpeed = Math.min(this.ballSpeed, GAME_CONFIG.MAX_BALL_SPEED);
+        
+        // Initial velocity at a slightly different angle
+        const angle = Math.random() * Math.PI * 2; // Random direction
+        const newBallVelocity = new THREE.Vector2(
+            Math.cos(angle) * clampedSpeed,
+            Math.sin(angle) * clampedSpeed
+        );
+    
+        // Add to scene and ball array
+        this.scene.add(newBall);
+        this.balls.push({
+            mesh: newBall,
+            velocity: newBallVelocity
+        });
+    }
+
     createWalls() {
         this.wallThickness = 0.3;
         const wallMaterial = new THREE.MeshPhongMaterial({
@@ -302,6 +340,7 @@ class BreakoutGame {
 
     createBricks() {
         this.bricks = [];
+        this.balls = [this.ball]; // Track all active balls
 
         // Calculate brick dimensions based on screen size
         this.brickWidth = (this.sceneWidth - (this.brickColumns + 1) * this.brickPadding) / this.brickColumns;
@@ -314,10 +353,25 @@ class BreakoutGame {
         for (let row = 0; row < this.brickRows; row++) {
             for (let col = 0; col < this.brickColumns; col++) {
                 const brickGeometry = new THREE.BoxGeometry(this.brickWidth, this.brickHeight, this.brickDepth);
-                // Use modulo to ensure we don't go out of bounds if we have more rows than colors
-                const colorIndex = row % this.brickColorsByRow.length;
+
+                // Determine if this will be a special brick
+                const isSpecial = Math.random() < GAME_CONFIG.SPECIAL_BRICK_CHANCE;
+                const specialType = isSpecial ? (Math.random() < 0.5 ? 'multiHit' : 'extraBall') : null;
+
+                // Select brick color based on type
+                let brickColor;
+                if (specialType === 'multiHit') {
+                    brickColor = GAME_CONFIG.MULTI_HIT_BRICK_COLOR;
+                } else if (specialType === 'extraBall') {
+                    brickColor = GAME_CONFIG.EXTRA_BALL_BRICK_COLOR;
+                } else {
+                    // Regular brick - use row color
+                    const colorIndex = row % this.brickColorsByRow.length;
+                    brickColor = this.brickColorsByRow[colorIndex];
+                }
+
                 const brickMaterial = new THREE.MeshPhongMaterial({
-                    color: this.brickColorsByRow[colorIndex],
+                    color: brickColor,
                     specular: 0xffffff,
                     shininess: 30
                 });
@@ -335,7 +389,9 @@ class BreakoutGame {
                     mesh: brick,
                     row: row,
                     col: col,
-                    active: true
+                    active: true,
+                    special: specialType,
+                    hitsRemaining: specialType === 'multiHit' ? 2 : 1
                 });
             }
         }
@@ -433,29 +489,31 @@ class BreakoutGame {
             const maxBounceAngle = Math.PI / 3; // 60 degrees
             const bounceAngle = hitPosition * maxBounceAngle;
 
-            // Calculate new velocity - FIXED: removed ball speed increment
-            // Use current ball speed without increasing it
+            // Increment ball speed and clamp to maximum
+            this.ballSpeed = Math.min(this.ballSpeed + this.ballSpeedIncrement, GAME_CONFIG.MAX_BALL_SPEED);
+
+            // Calculate new velocity using clamped ball speed
             this.ballVelocity.x = Math.sin(bounceAngle) * this.ballSpeed;
             this.ballVelocity.y = Math.cos(bounceAngle) * this.ballSpeed;
         }
     }
 
-    checkWallCollisions() {
+    checkWallCollisions(ballMesh, ballVelocity) {
         // Ball-wall collisions
-        if (this.ball.position.x - this.ballRadius <= -this.sceneWidth / 2 + this.wallThickness) {
+        if (ballMesh.position.x - this.ballRadius <= -this.sceneWidth / 2 + this.wallThickness) {
             // Left wall collision
-            this.ball.position.x = -this.sceneWidth / 2 + this.ballRadius + this.wallThickness;
-            this.ballVelocity.x = Math.abs(this.ballVelocity.x);
-        } else if (this.ball.position.x + this.ballRadius >= this.sceneWidth / 2 - this.wallThickness) {
+            ballMesh.position.x = -this.sceneWidth / 2 + this.ballRadius + this.wallThickness;
+            ballVelocity.x = Math.abs(ballVelocity.x);
+        } else if (ballMesh.position.x + this.ballRadius >= this.sceneWidth / 2 - this.wallThickness) {
             // Right wall collision
-            this.ball.position.x = this.sceneWidth / 2 - this.ballRadius - this.wallThickness;
-            this.ballVelocity.x = -Math.abs(this.ballVelocity.x);
+            ballMesh.position.x = this.sceneWidth / 2 - this.ballRadius - this.wallThickness;
+            ballVelocity.x = -Math.abs(ballVelocity.x);
         }
 
-        if (this.ball.position.y + this.ballRadius >= this.sceneHeight / 2 - this.wallThickness) {
+        if (ballMesh.position.y + this.ballRadius >= this.sceneHeight / 2 - this.wallThickness) {
             // Top wall collision
-            this.ball.position.y = this.sceneHeight / 2 - this.ballRadius - this.wallThickness;
-            this.ballVelocity.y = -Math.abs(this.ballVelocity.y);
+            ballMesh.position.y = this.sceneHeight / 2 - this.ballRadius - this.wallThickness;
+            ballVelocity.y = -Math.abs(ballVelocity.y);
         }
     }
 
@@ -476,85 +534,99 @@ class BreakoutGame {
         }
     }
 
-    // Replace the current checkBrickCollisions() method with this improved version
-
     checkBrickCollisions() {
-        // Ball-brick collision detection using ray casting for more accurate collision detection
-        const ballPosition = this.ball.position.clone();
-        const ballDirection = this.ballVelocity.clone().normalize();
+        // Check each active ball
+        for (let ballIndex = 0; ballIndex < this.balls.length; ballIndex++) {
+            const currentBall = ballIndex === 0 ?
+                { mesh: this.ball, velocity: this.ballVelocity } :
+                this.balls[ballIndex];
 
-        // Create a ray from the ball's position in the direction of its movement
-        const raycaster = new THREE.Raycaster(
-            ballPosition,
-            ballDirection,
-            0,  // Near
-            this.ballRadius + this.ballVelocity.length() // Distance = ball radius + velocity magnitude
-        );
+            const ballPosition = currentBall.mesh.position.clone();
+            const ballDirection = currentBall.velocity.clone().normalize();
 
-        // Get all potential brick intersections
-        const brickMeshes = this.bricks
-            .filter(brick => brick.active)
-            .map(brick => brick.mesh);
+            // Create a ray from the ball's position
+            const raycaster = new THREE.Raycaster(
+                ballPosition,
+                ballDirection,
+                0,
+                this.ballRadius + currentBall.velocity.length()
+            );
 
-        if (brickMeshes.length === 0) return;
+            // Get all potential brick intersections
+            const brickMeshes = this.bricks
+                .filter(brick => brick.active)
+                .map(brick => brick.mesh);
 
-        const intersects = raycaster.intersectObjects(brickMeshes);
+            if (brickMeshes.length === 0) continue;
 
-        if (intersects.length > 0) {
-            // Find the corresponding brick data
-            const hitBrickMesh = intersects[0].object;
-            const hitBrick = this.bricks.find(brick => brick.mesh === hitBrickMesh);
+            const intersects = raycaster.intersectObjects(brickMeshes);
 
-            if (hitBrick && hitBrick.active) {
-                // Deactivate the brick
-                hitBrick.active = false;
-                hitBrick.mesh.visible = false;
+            if (intersects.length > 0) {
+                // Find the corresponding brick data
+                const hitBrickMesh = intersects[0].object;
+                const hitBrick = this.bricks.find(brick => brick.mesh === hitBrickMesh);
 
-                // Update score - bricks in higher rows are worth more points
-                this.score += (this.brickRows - hitBrick.row) * GAME_CONFIG.POINTS_PER_ROW;
-                this.updateUI();
+                if (hitBrick && hitBrick.active) {
+                    // Decrement hits remaining
+                    hitBrick.hitsRemaining--;
 
-                // Determine collision normal from the intersection face
-                const normal = intersects[0].face.normal.clone();
-                // Transform the normal from local brick space to world space
-                normal.transformDirection(hitBrickMesh.matrixWorld);
+                    // Handle multi-hit brick with hits remaining
+                    if (hitBrick.hitsRemaining > 0) {
+                        // Visual feedback - darken the brick
+                        hitBrick.mesh.material.color.offsetHSL(0, 0, -0.2);
+                    } else {
+                        // Deactivate the brick
+                        hitBrick.active = false;
+                        hitBrick.mesh.visible = false;
 
-                // Reflect the ball velocity based on the collision normal
-                // This is more physically accurate than the previous method
-                // Convert THREE.Vector3 normal to THREE.Vector2 for our 2D physics
-                const normal2D = new THREE.Vector2(normal.x, normal.y);
-                const dot = this.ballVelocity.dot(normal2D);
-                this.ballVelocity.x -= 2 * dot * normal2D.x;
-                this.ballVelocity.y -= 2 * dot * normal2D.y;
+                        // Handle special brick effects
+                        if (hitBrick.special === 'extraBall') {
+                            this.createExtraBall();
+                        }
 
-                // Increase ball speed slightly when hitting a brick
-                this.ballSpeed = Math.min(this.ballSpeed + this.blockSpeedBoost, GAME_CONFIG.MAX_BALL_SPEED);
+                        // Update score - bricks in higher rows are worth more points
+                        this.score += (this.brickRows - hitBrick.row) * GAME_CONFIG.POINTS_PER_ROW;
+                        this.updateUI();
+                    }
 
-                // Normalize velocity vector then scale to current ball speed
-                const velocityMagnitude = this.ballVelocity.length();
-                if (velocityMagnitude > 0) {
-                    this.ballVelocity.divideScalar(velocityMagnitude).multiplyScalar(this.ballSpeed);
+                    // Determine collision normal from the intersection face
+                    const normal = intersects[0].face.normal.clone();
+                    normal.transformDirection(hitBrickMesh.matrixWorld);
+
+                    // Reflect the ball velocity
+                    const normal2D = new THREE.Vector2(normal.x, normal.y);
+                    const dot = currentBall.velocity.dot(normal2D);
+                    currentBall.velocity.x -= 2 * dot * normal2D.x;
+                    currentBall.velocity.y -= 2 * dot * normal2D.y;
+
+                    // Increase ball speed slightly when hitting a brick
+                    this.ballSpeed = Math.min(this.ballSpeed + this.blockSpeedBoost, GAME_CONFIG.MAX_BALL_SPEED);
+
+                    // Normalize velocity and scale to ball speed
+                    const velocityMagnitude = currentBall.velocity.length();
+                    if (velocityMagnitude > 0) {
+                        currentBall.velocity.divideScalar(velocityMagnitude).multiplyScalar(this.ballSpeed);
+                    }
+
+                    // Move ball slightly away from collision point
+                    const pushDistance = this.ballRadius * 1.1;
+                    currentBall.mesh.position.add(normal.multiplyScalar(pushDistance));
+
+                    // Check if all bricks are destroyed
+                    const remainingBricks = this.bricks.filter(b => b.active).length;
+                    if (remainingBricks === 0) {
+                        this.showLevelComplete();
+                    }
                 }
-
-                // Move ball slightly away from collision point to prevent getting stuck
-                const pushDistance = this.ballRadius * 1.1;
-                this.ball.position.add(normal.multiplyScalar(pushDistance));
-
-                // Check if all bricks are destroyed
-                const remainingBricks = this.bricks.filter(b => b.active).length;
-                if (remainingBricks === 0) {
-                    this.showLevelComplete();
-                }
+            } else {
+                // Fallback to sphere-box collision
+                this.sphereBoxCollisionCheck(currentBall, ballIndex);
             }
-        } else {
-            // Fallback to sphere-box collision for cases where ray might miss
-            this.sphereBoxCollisionCheck();
         }
     }
 
-    // Add this new method for the fallback collision detection
-    sphereBoxCollisionCheck() {
-        const ballSphere = new THREE.Sphere(this.ball.position.clone(), this.ballRadius);
+    sphereBoxCollisionCheck(currentBall, ballIndex) {
+        const ballSphere = new THREE.Sphere(currentBall.mesh.position.clone(), this.ballRadius);
 
         // Check active bricks only
         for (const brick of this.bricks) {
@@ -566,13 +638,12 @@ class BreakoutGame {
             if (brickBox.intersectsSphere(ballSphere)) {
                 // Determine which face of the brick was hit
                 const brickCenter = brickMesh.position.clone();
-                const ballCenter = this.ball.position.clone();
+                const ballCenter = currentBall.mesh.position.clone();
                 const direction = new THREE.Vector3().subVectors(ballCenter, brickCenter);
 
                 // Get box half-extents
                 const halfWidth = this.brickWidth / 2;
                 const halfHeight = this.brickHeight / 2;
-                const halfDepth = this.brickDepth / 2;
 
                 // Determine the collision normal
                 let normal = new THREE.Vector3();
@@ -584,37 +655,49 @@ class BreakoutGame {
                 const penetrationY = halfHeight + this.ballRadius - absY;
 
                 if (penetrationX < penetrationY) {
-                    // X-axis collision
                     normal.set(Math.sign(direction.x), 0, 0);
                 } else {
-                    // Y-axis collision
                     normal.set(0, Math.sign(direction.y), 0);
                 }
 
-                // Reflect the ball velocity (manually for Vector2)
-                const dot = this.ballVelocity.dot(new THREE.Vector2(normal.x, normal.y));
-                this.ballVelocity.x -= 2 * dot * normal.x;
-                this.ballVelocity.y -= 2 * dot * normal.y;
+                // Reflect the ball velocity
+                const dot = currentBall.velocity.dot(new THREE.Vector2(normal.x, normal.y));
+                currentBall.velocity.x -= 2 * dot * normal.x;
+                currentBall.velocity.y -= 2 * dot * normal.y;
 
                 // Push the ball out of the brick to prevent sticking
                 const pushDistance = this.ballRadius * 1.1;
-                this.ball.position.add(normal.multiplyScalar(pushDistance));
+                currentBall.mesh.position.add(normal.multiplyScalar(pushDistance));
 
-                // Deactivate the brick
-                brick.active = false;
-                brick.mesh.visible = false;
+                // Decrement hits remaining
+                brick.hitsRemaining--;
 
-                // Update score
-                this.score += (this.brickRows - brick.row) * GAME_CONFIG.POINTS_PER_ROW;
-                this.updateUI();
+                // Handle multi-hit brick with hits remaining
+                if (brick.hitsRemaining > 0) {
+                    // Visual feedback - darken the brick
+                    brick.mesh.material.color.offsetHSL(0, 0, -0.2);
+                } else {
+                    // Deactivate the brick
+                    brick.active = false;
+                    brick.mesh.visible = false;
+
+                    // Handle special brick effects
+                    if (brick.special === 'extraBall') {
+                        this.createExtraBall();
+                    }
+
+                    // Update score
+                    this.score += (this.brickRows - brick.row) * GAME_CONFIG.POINTS_PER_ROW;
+                    this.updateUI();
+                }
 
                 // Increase ball speed
                 this.ballSpeed = Math.min(this.ballSpeed + this.blockSpeedBoost, GAME_CONFIG.MAX_BALL_SPEED);
 
                 // Normalize and scale velocity
-                const velocityMagnitude = this.ballVelocity.length();
+                const velocityMagnitude = currentBall.velocity.length();
                 if (velocityMagnitude > 0) {
-                    this.ballVelocity.divideScalar(velocityMagnitude).multiplyScalar(this.ballSpeed);
+                    currentBall.velocity.divideScalar(velocityMagnitude).multiplyScalar(this.ballSpeed);
                 }
 
                 // Check for level completion
@@ -648,7 +731,7 @@ class BreakoutGame {
 
     increaseDifficulty() {
         // Increase base ball speed (but still keep it manageable)
-        this.ballSpeed = Math.min(this.ballSpeed + 0.03, this.maxBallSpeed * 0.8);
+        this.ballSpeed = Math.min(this.ballSpeed + 0.03, GAME_CONFIG.MAX_BALL_SPEED);
 
         // Adjust difficulty based on level
         if (this.level > 1) {
@@ -673,47 +756,74 @@ class BreakoutGame {
         }
     }
 
+    updateBall(ballMesh, ballVelocity, timeFactor, steps) {
+        // Use multiple substeps for more accurate collision detection
+        const subStepFactor = timeFactor / steps;
+        
+        for (let i = 0; i < steps; i++) {
+            // Update ball position
+            ballMesh.position.x += ballVelocity.x * subStepFactor;
+            ballMesh.position.y += ballVelocity.y * subStepFactor;
+            
+            // Check for wall collisions
+            this.checkWallCollisions(ballMesh, ballVelocity);
+            
+            // For the main ball only
+            if (ballMesh === this.ball) {
+                this.checkPaddleCollision();
+                this.checkBottomCollision();
+            }
+        }}
+
     animate(time) {
         if (this.gameOver) return;
         if (!this.gameStarted) {
             requestAnimationFrame(this.animate);
             return;
         }
-
+        
         if (!this.paused) {
             // Calculate delta time for smoother animation
             const now = Date.now();
             const deltaTime = now - (this.lastTime || now);
             this.lastTime = now;
-
+        
             // Limit maximum delta time to prevent huge jumps after tab switching
             const limitedDelta = Math.min(deltaTime, 50);
-
+        
             // Calculate a time factor to ensure consistent speed regardless of frame rate
             const timeFactor = limitedDelta / 16.667; // 16.667ms is roughly 60fps
-
+        
             // Update paddle position with smooth movement
             if (this.paddle && this.paddleTargetX !== undefined) {
                 const currentX = this.paddle.position.x;
                 const dx = this.paddleTargetX - currentX;
                 this.paddle.position.x += dx * this.paddleSpeed * timeFactor;
             }
-
+        
             // Use adaptive substeps based on ball speed
             const steps = Math.max(5, Math.ceil(this.ballSpeed / 0.02) * 5);
-
-            // Store original position to calculate actual movement vector
-            const originalPosition = this.ball.position.clone();
-
-            for (let i = 0; i < steps; i++) {
-                // Update ball position in small increments
-                this.ball.position.x += (this.ballVelocity.x * timeFactor) / steps;
-                this.ball.position.y += (this.ballVelocity.y * timeFactor) / steps;
-
-                // Check for collisions after each small movement
-                this.checkCollisions();
+        
+            // Update main ball
+            this.updateBall(this.ball, this.ballVelocity, timeFactor, steps);
+        
+            // Update additional balls
+            for (let i = 1; i < this.balls.length; i++) {
+                const ball = this.balls[i];
+                this.updateBall(ball.mesh, ball.velocity, timeFactor, steps);
+        
+                // Check if ball is lost
+                if (ball.mesh.position.y - this.ballRadius < -this.sceneHeight / 2) {
+                    // Remove this ball
+                    this.scene.remove(ball.mesh);
+                    this.balls.splice(i, 1);
+                    i--; // Adjust index since we removed an element
+                }
             }
-
+            
+            // Check for brick collisions after updating ball positions
+            this.checkBrickCollisions();
+        
             // Update brick positions (for higher levels with moving bricks)
             if (this.level > GAME_CONFIG.BRICK_MOVEMENT_START_LEVEL && this.brickMovementSpeed) {
                 const time = now * 0.001;
@@ -724,22 +834,23 @@ class BreakoutGame {
                         if (!brick.originalX) {
                             brick.originalX = originalX;
                         }
-
+        
                         brick.mesh.position.x = originalX + Math.sin(time + brick.col * 0.3) * this.brickMovementSpeed * 2;
                     }
                 }
             }
         }
-
+        
         // Render the scene
         this.renderer.render(this.scene, this.camera);
-
+        
         // Request next frame
         requestAnimationFrame(this.animate);
-    }
-}
 
-// Initialize the game when the DOM is loaded
-document.addEventListener('DOMContentLoaded', () => {
-    const game = new BreakoutGame();
-});
+        }
+    }
+
+
+    document.addEventListener('DOMContentLoaded', () => {
+        const game = new BreakoutGame();
+    });
