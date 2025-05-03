@@ -3,15 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Gradius Clone</title>
+    <title>Vertical Gradius Clone</title>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
     <div id="game-container">
         <div id="game-canvas"></div>
         <div id="ui-container">
-            <div id="score">Score: 0</div>
-            <div id="lives">Lives: 3</div>
+            <div id="top-ui">
+                <div id="score">Score: 0</div>
+                <div id="lives">Lives: 3</div>
+            </div>
+            <div id="control-container">
+                <div id="fire-button">FIRE</div>
+            </div>
             <div id="power-meter">
                 <div class="power-item" data-power="speed">Speed</div>
                 <div class="power-item" data-power="missile">Missile</div>
@@ -22,6 +27,12 @@
         </div>
         <div id="start-screen">
             <h1>GRADIUS</h1>
+            <div class="options">
+                <label class="option">
+                    <input type="checkbox" id="auto-fire-toggle" checked>
+                    Auto-Fire
+                </label>
+            </div>
             <button id="start-button">START GAME</button>
         </div>
         <div id="game-over-screen" class="hidden">
