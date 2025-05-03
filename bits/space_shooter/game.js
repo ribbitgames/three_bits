@@ -29,6 +29,12 @@ const gameOverElement = document.getElementById('game-over');
 const levelElement = document.getElementById('level');
 const startScreenElement = document.getElementById('start-screen');
 
+// Mobile controls
+let virtualJoystick = null;
+let fireButton = null;
+let autoFire = false;
+let lastAutoFireTime = 0;
+
 // Game settings
 const settings = {
   enemySpawnRate: 1500,
@@ -37,8 +43,151 @@ const settings = {
   playerSpeed: 0.15,
   bulletSpeed: 0.4,
   particleLifespan: 1000,
-  invincibleTime: 2000
+  invincibleTime: 2000,
+  autoFireRate: 400 // Time in ms between auto-fire shots
 };
+
+// Create mobile controls
+function createMobileControls() {
+  if (!isMobile) return;
+  
+  // Create joystick container
+  virtualJoystick = document.createElement('div');
+  virtualJoystick.id = 'virtual-joystick';
+  document.body.appendChild(virtualJoystick);
+  
+  // Create joystick inner pad
+  const joystickInner = document.createElement('div');
+  joystickInner.id = 'joystick-inner';
+  virtualJoystick.appendChild(joystickInner);
+  
+  // Create fire button
+  fireButton = document.createElement('div');
+  fireButton.id = 'fire-button';
+  fireButton.innerHTML = '🔥';
+  document.body.appendChild(fireButton);
+  
+  // Create auto-fire toggle
+  const autoFireToggle = document.createElement('div');
+  autoFireToggle.id = 'auto-fire-toggle';
+  autoFireToggle.innerHTML = 'AUTO: OFF';
+  autoFireToggle.addEventListener('click', () => {
+    autoFire = !autoFire;
+    autoFireToggle.innerHTML = autoFire ? 'AUTO: ON' : 'AUTO: OFF';
+    autoFireToggle.classList.toggle('active', autoFire);
+  });
+  document.body.appendChild(autoFireToggle);
+  
+  // Joystick variables
+  let joystickActive = false;
+  let joystickOrigin = { x: 0, y: 0 };
+  let joystickPosition = { x: 0, y: 0 };
+  const joystickRadius = parseInt(getComputedStyle(virtualJoystick).width) / 2;
+  
+  // Joystick touch events
+  virtualJoystick.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    joystickActive = true;
+    const touch = e.touches[0];
+    const rect = virtualJoystick.getBoundingClientRect();
+    joystickOrigin.x = rect.left + rect.width / 2;
+    joystickOrigin.y = rect.top + rect.height / 2;
+    updateJoystickPosition(touch);
+  });
+  
+  document.addEventListener('touchmove', (e) => {
+    if (!joystickActive) return;
+    e.preventDefault();
+    const touch = Array.from(e.touches).find(t => {
+      const rect = virtualJoystick.getBoundingClientRect();
+      return t.clientX > rect.left - 50 && t.clientX < rect.right + 50 &&
+             t.clientY > rect.top - 50 && t.clientY < rect.bottom + 50;
+    });
+    if (touch) updateJoystickPosition(touch);
+  }, { passive: false });
+  
+  document.addEventListener('touchend', (e) => {
+    if (!joystickActive) return;
+    
+    // Check if the joystick touch ended
+    let joystickTouchStillActive = false;
+    for (let i = 0; i < e.touches.length; i++) {
+      const touch = e.touches[i];
+      const rect = virtualJoystick.getBoundingClientRect();
+      if (touch.clientX > rect.left - 50 && touch.clientX < rect.right + 50 &&
+          touch.clientY > rect.top - 50 && touch.clientY < rect.bottom + 50) {
+        joystickTouchStillActive = true;
+        break;
+      }
+    }
+    
+    if (!joystickTouchStillActive) {
+      joystickActive = false;
+      joystickInner.style.transform = `translate(0px, 0px)`;
+      playerInput.x = 0;
+    }
+  });
+  
+  // Update joystick position and player input
+  function updateJoystickPosition(touch) {
+    let dx = touch.clientX - joystickOrigin.x;
+    let dy = touch.clientY - joystickOrigin.y;
+    
+    // Calculate distance from origin
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    
+    // Normalize if outside radius
+    if (distance > joystickRadius) {
+      dx = dx * joystickRadius / distance;
+      dy = dy * joystickRadius / distance;
+    }
+    
+    // Update joystick visuals
+    joystickInner.style.transform = `translate(${dx}px, ${dy}px)`;
+    
+    // Map to player input (-1 to 1 range)
+    playerInput.x = dx / joystickRadius * 3; // Amplify for better control
+  }
+  
+  // Fire button events
+  fireButton.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    if (player && Date.now() - player.lastShot > (player.rapidFire ? 200 : 400)) {
+      createBullet(player);
+      player.lastShot = Date.now();
+    }
+  });
+  
+  // Fire button continuous press
+  let firePressInterval = null;
+  
+  fireButton.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    handleFireButtonPress();
+    
+    // Start interval for continuous fire
+    if (!autoFire) {
+      firePressInterval = setInterval(handleFireButtonPress, player.rapidFire ? 200 : 400);
+    }
+  });
+  
+  fireButton.addEventListener('touchend', () => {
+    clearInterval(firePressInterval);
+  });
+  
+  function handleFireButtonPress() {
+    if (!gameStarted || gameOver) return;
+    if (player && Date.now() - player.lastShot > (player.rapidFire ? 200 : 400)) {
+      createBullet(player);
+      player.lastShot = Date.now();
+      
+      // Add haptic feedback if supported
+      if (navigator.vibrate) {
+        navigator.vibrate(20);
+      }
+    }
+  }
+}
 
 // Create starfield background
 function createStarfield() {
@@ -185,7 +334,10 @@ function createPowerUp() {
 
 // Create explosion particles
 function createExplosion(position, color = 0xffff00) {
-  for (let i = 0; i < 20; i++) {
+  // Reduce particles on mobile for better performance
+  const particleCount = isMobile ? 10 : 20;
+  
+  for (let i = 0; i < particleCount; i++) {
     const particle = new THREE.Mesh(
       new THREE.SphereGeometry(0.1, 8, 8),
       new THREE.MeshBasicMaterial({ color })
@@ -202,6 +354,11 @@ function createExplosion(position, color = 0xffff00) {
     
     scene.add(particle);
     particles.push(particle);
+  }
+  
+  // Add haptic feedback on mobile
+  if (isMobile && navigator.vibrate) {
+    navigator.vibrate(50);
   }
 }
 
@@ -237,7 +394,7 @@ function createFloatingText(text, position, color = 'white') {
 let playerInput = { x: 0, y: 0 };
 
 function handleMouseMove(event) {
-  if (!gameStarted || gameOver) return;
+  if (!gameStarted || gameOver || isMobile) return;
   
   const aspectRatio = window.innerWidth / window.innerHeight;
   const viewWidth = aspectRatio * 9;
@@ -246,25 +403,13 @@ function handleMouseMove(event) {
 }
 
 function handleTouchMove(event) {
-  if (!gameStarted || gameOver) return;
+  if (!gameStarted || gameOver || !isMobile) return;
   event.preventDefault();
   
-  const aspectRatio = window.innerWidth / window.innerHeight;
-  const viewWidth = aspectRatio * 9;
-  
-  playerInput.x = (event.touches[0].clientX / window.innerWidth) * viewWidth - (viewWidth / 2);
+  // Touch movement now handled by virtual joystick
 }
 
-function handleDeviceOrientation(event) {
-  if (!gameStarted || gameOver || !isMobile) return;
-  
-  // Use gamma (left/right tilt) for horizontal movement
-  // Convert degrees to normalized value
-  const tiltSensitivity = 0.1;
-  playerInput.x = event.gamma * tiltSensitivity;
-}
-
-function handleTap() {
+function handleTap(event) {
   if (gameOver) {
     restartGame();
     return;
@@ -275,8 +420,17 @@ function handleTap() {
     return;
   }
   
-  // Fire bullet
-  if (player && Date.now() - player.lastShot > (player.rapidFire ? 200 : 400)) {
+  // Don't process taps if they're on control elements
+  if (isMobile) {
+    const target = event.target;
+    if (target.id === 'virtual-joystick' || target.id === 'joystick-inner' ||
+        target.id === 'fire-button' || target.id === 'auto-fire-toggle') {
+      return;
+    }
+  }
+  
+  // Fire bullet (only for non-mobile or when controls aren't showing yet)
+  if (player && !isMobile && Date.now() - player.lastShot > (player.rapidFire ? 200 : 400)) {
     createBullet(player);
     player.lastShot = Date.now();
   }
@@ -291,22 +445,28 @@ window.addEventListener('keydown', (event) => {
   if (event.code === 'Space') handleTap();
 });
 
-// Request device orientation permission on iOS
-function requestDeviceOrientationPermission() {
-  if (isMobile && typeof DeviceOrientationEvent !== 'undefined' && 
-      typeof DeviceOrientationEvent.requestPermission === 'function') {
-    
-    DeviceOrientationEvent.requestPermission()
-      .then(permissionState => {
-        if (permissionState === 'granted') {
-          window.addEventListener('deviceorientation', handleDeviceOrientation);
-        }
-      })
-      .catch(console.error);
-  } else {
-    window.addEventListener('deviceorientation', handleDeviceOrientation);
+// Pause game when tab loses focus
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden && gameStarted && !gameOver) {
+    // Create pause overlay if it doesn't exist
+    let pauseOverlay = document.getElementById('pause-overlay');
+    if (!pauseOverlay) {
+      pauseOverlay = document.createElement('div');
+      pauseOverlay.id = 'pause-overlay';
+      pauseOverlay.innerHTML = 'PAUSED<br>Tap to Resume';
+      document.body.appendChild(pauseOverlay);
+    }
+    pauseOverlay.style.display = 'block';
   }
-}
+});
+
+// Resume game when tapping on pause overlay
+document.addEventListener('click', (event) => {
+  const pauseOverlay = document.getElementById('pause-overlay');
+  if (pauseOverlay && pauseOverlay.style.display === 'block') {
+    pauseOverlay.style.display = 'none';
+  }
+});
 
 // Setup game
 camera.position.z = 5;
@@ -317,7 +477,19 @@ const player = createPlayer();
 function updateGame() {
   if (!gameStarted || gameOver) return;
   
+  // Check for pause overlay
+  const pauseOverlay = document.getElementById('pause-overlay');
+  if (pauseOverlay && pauseOverlay.style.display === 'block') {
+    return; // Game is paused
+  }
+  
   const currentTime = Date.now();
+  
+  // Handle auto-fire
+  if (autoFire && player && currentTime - lastAutoFireTime > (player.rapidFire ? 200 : settings.autoFireRate)) {
+    createBullet(player);
+    lastAutoFireTime = currentTime;
+  }
   
   // Update player position with smoothing
   const targetX = THREE.MathUtils.clamp(
@@ -501,6 +673,11 @@ function updateGame() {
           break;
       }
       
+      // Add haptic feedback on power-up collection
+      if (isMobile && navigator.vibrate) {
+        navigator.vibrate([30, 30, 30]);
+      }
+      
       scene.remove(powerUp);
       powerUps.splice(i, 1);
     }
@@ -546,7 +723,9 @@ function startGame() {
   livesElement.style.display = 'block';
   levelElement.style.display = 'block';
   
-  requestDeviceOrientationPermission();
+  if (isMobile) {
+    createMobileControls();
+  }
 }
 
 // End the game
@@ -554,6 +733,14 @@ function endGame() {
   gameOver = true;
   gameOverElement.innerHTML = `Game Over!<br>Score: ${score}<br>Level: ${level}<br>Tap to Restart`;
   gameOverElement.style.display = 'block';
+  
+  // Clean up mobile controls
+  if (isMobile) {
+    if (virtualJoystick) virtualJoystick.style.display = 'none';
+    if (fireButton) fireButton.style.display = 'none';
+    const autoFireToggle = document.getElementById('auto-fire-toggle');
+    if (autoFireToggle) autoFireToggle.style.display = 'none';
+  }
 }
 
 // Restart the game
@@ -588,6 +775,14 @@ function restartGame() {
   player.isInvincible = false;
   player.rapidFire = false;
   player.material.opacity = 1.0;
+  
+  // Show mobile controls
+  if (isMobile) {
+    if (virtualJoystick) virtualJoystick.style.display = 'block';
+    if (fireButton) fireButton.style.display = 'block';
+    const autoFireToggle = document.getElementById('auto-fire-toggle');
+    if (autoFireToggle) autoFireToggle.style.display = 'block';
+  }
 }
 
 // Resize handler
@@ -595,6 +790,18 @@ function handleResize() {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
+  
+  // Reposition mobile controls
+  if (isMobile && gameStarted && !gameOver) {
+    if (virtualJoystick) {
+      virtualJoystick.style.left = '20px';
+      virtualJoystick.style.bottom = '20px';
+    }
+    if (fireButton) {
+      fireButton.style.right = '20px';
+      fireButton.style.bottom = '20px';
+    }
+  }
 }
 
 window.addEventListener('resize', handleResize);
