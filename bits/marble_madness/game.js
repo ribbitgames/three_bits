@@ -581,14 +581,10 @@ function handleTouch(callback) {
  */
 function onTouchStart(event) {
     event.preventDefault();
-    if (event.touches.length > 0) {
-        // Create a pointer-like event from touch
-        const touch = event.touches[0];
-        const pointerEvent = {
-            clientX: touch.clientX,
-            clientY: touch.clientY
-        };
-        onPointerDown(pointerEvent);
+    if (gameState === GAME_STATE.PLAYING && event.touches.length > 0) {
+        isPointerDown = true;
+        lastPointerPosition.x = event.touches[0].clientX;
+        lastPointerPosition.y = event.touches[0].clientY;
     }
 }
 
@@ -598,14 +594,43 @@ function onTouchStart(event) {
  */
 function onTouchMove(event) {
     event.preventDefault();
-    if (event.touches.length > 0) {
-        // Create a pointer-like event from touch
-        const touch = event.touches[0];
-        const pointerEvent = {
-            clientX: touch.clientX,
-            clientY: touch.clientY
-        };
-        onPointerMove(pointerEvent);
+    if (gameState === GAME_STATE.PLAYING && isPointerDown && event.touches.length > 0) {
+        // Calculate movement direction
+        const deltaX = event.touches[0].clientX - lastPointerPosition.x;
+        const deltaY = event.touches[0].clientY - lastPointerPosition.y;
+
+        // Calculate total distance moved for this swipe
+        const totalDistance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+
+        // Only apply a force if we've moved a certain minimum distance
+        if (totalDistance > 5) {
+            // Calculate swipe force based on distance
+            const swipeForce = totalDistance * 0.001;
+
+            // Get camera directions for mapping screen moves to world moves
+            const cameraRight = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+            const cameraDown = new THREE.Vector3(0, 0, 1).applyQuaternion(camera.quaternion);
+
+            // Calculate impulse in world space based on screen movement direction
+            const normalizedDeltaX = deltaX / totalDistance;
+            const normalizedDeltaY = deltaY / totalDistance;
+
+            const impulseX = (normalizedDeltaX * cameraRight.x + normalizedDeltaY * cameraDown.x) * swipeForce;
+            const impulseZ = (normalizedDeltaX * cameraRight.z + normalizedDeltaY * cameraDown.z) * swipeForce;
+
+            // Add to current velocity
+            marbleVelocity.x += impulseX;
+            marbleVelocity.z += impulseZ;
+
+            // Cap maximum velocity
+            const maxVelocity = 0.12;
+            marbleVelocity.x = Math.max(-maxVelocity, Math.min(maxVelocity, marbleVelocity.x));
+            marbleVelocity.z = Math.max(-maxVelocity, Math.min(maxVelocity, marbleVelocity.z));
+        }
+
+        // Update last position
+        lastPointerPosition.x = event.touches[0].clientX;
+        lastPointerPosition.y = event.touches[0].clientY;
     }
 }
 
