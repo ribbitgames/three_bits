@@ -219,6 +219,9 @@ function createTexture(emoji, size = 64, bgColor = null) {
   canvas.width = 128;
   canvas.height = 128;
   
+  // Clear the canvas with transparency
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  
   if (bgColor) {
     ctx.fillStyle = bgColor;
     ctx.fillRect(0, 0, 128, 128);
@@ -307,8 +310,11 @@ function createPowerUp() {
   const typeIndex = Math.floor(Math.random() * powerUpTypes.length);
   const powerUpInfo = powerUpTypes[typeIndex];
   
-  const powerUpTexture = createTexture(powerUpInfo.emoji, 48, 'rgba(255,255,255,0.2)');
-  const powerUpMaterial = new THREE.SpriteMaterial({ map: powerUpTexture });
+  const powerUpTexture = createTexture(powerUpInfo.emoji, 48);
+  const powerUpMaterial = new THREE.SpriteMaterial({ 
+    map: powerUpTexture,
+    transparent: true
+  });
   const powerUp = new THREE.Sprite(powerUpMaterial);
   
   const aspectRatio = window.innerWidth / window.innerHeight;
