@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Arrow Game</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background: #000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            touch-action: none; /* Prevent default touch behaviors */
+        }
+        canvas {
+            display: block;
+            max-width: 100%;
+            max-height: 100%;
+            width: auto;
+            height: auto;
+            touch-action: none; /* Prevent default touch behaviors */
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Set canvas size for mobile
+        function resizeCanvas() {
+            const dpr = window.devicePixelRatio || 1;
+            const aspectRatio = 2 / 3; // 400x600
+            let width = window.innerWidth;
+            let height = window.innerHeight;
+
+            if (width / height > aspectRatio) {
+                width = height * aspectRatio;
+            } else {
+                height = width / aspectRatio;
+            }
+
+            canvas.width = width * dpr;
+            canvas.height = height * dpr;
+            canvas.style.width = `${width}px`;
+            canvas.style.height = `${height}px`;
+            ctx.scale(dpr, dpr);
+        }
+
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        // Game state
+        let gameOver = false;
+        let score = 0;
+
+        // Arrow properties
+        const arrow = {
+            x: 50,
+            y: canvas.height / 2,
+            width: 20,
+            height: 20,
+            speed: 2.5,
+            forwardSpeed: 2,
+            rotation: 0
+        };
+
+        // Trail system
+        const trail = {
+            points: [],
+            maxLength: 15,
+            spacing: 5
+        };
+        let frameCount = 0;
+
+        // Obstacles array
+        let obstacles = [];
+        let levelOffset = 0;
+
+        // Define geometric patterns
+        const PATTERNS = [
+            {
+                name: 'triangle',
+                create: (x, y) => ({
+                    type: 'polygon',
+                    points: [
+                        {x: x, y: y + 60},
+                        {x: x + 50, y: y},
+                        {x: x + 100, y: y + 60}
+                    ],
+                    width: 100,
+                    height: 60
+                })
+            },
+            {
+                name: 'diamond',
+                create: (x, y) => ({
+                    type: 'polygon',
+                    points: [
+                        {x: x, y: y + 30},
+                        {x: x + 30, y: y},
+                        {x: x + 60, y: y + 30},
+                        {x: x + 30, y: y + 60}
+                    ],
+                    width: 60,
+                    height: 60
+                })
+            },
+            {
+                name: 'rectangle',
+                create: (x, y) => ({
+                    type: 'polygon',
+                    points: [
+                        {x: x, y: y},
+                        {x: x + 100, y: y},
+                        {x: x + 100, y: y + 40},
+                        {x: x, y: y + 40}
+                    ],
+                    width: 100,
+                    height: 40
+                })
+            }
+        ];
+
+        // Initialize game
+        function init() {
+            createInitialObstacles();
+        }
+
+        // Create initial set of obstacles
+        function createInitialObstacles() {
+            const minGap = 200;
+            const maxGap = 300;
+            let x = canvas.width;
+            let lastY = canvas.height / 2;
+
+            while (x < canvas.width * 2) {
+                const numObstacles = Math.floor(Math.random() * 2) + 2;
+                const pattern = PATTERNS[Math.floor(Math.random() * PATTERNS.length)];
+                const positions = [];
+                if (numObstacles === 2) {
+                    const gapSize = 150;
+                    const topMax = canvas.height - gapSize - pattern.create(0, 0).height;
+                    const y1 = Math.random() * (topMax / 2);
+                    const y2 = Math.random() * (topMax / 2) + canvas.height - topMax / 2;
+                    positions.push(y1, y2);
+                } else {
+                    const gapSize = 120;
+                    positions.push(
+                        50,
+                        canvas.height / 2 - pattern.create(0, 0).height / 2,
+                        canvas.height - pattern.create(0, 0).height - 50
+                    );
+                }
+
+                positions.forEach(y => {
+                    obstacles.push(pattern.create(x, y));
+                });
+
+                x += Math.random() * (maxGap - minGap) + minGap;
+            }
+        }
+
+        // Create new obstacle
+        function createObstacle() {
+            const minGap = 200;
+            const maxGap = 300;
+            const lastObstacle = obstacles[obstacles.length - 1];
+            const x = lastObstacle ? 
+                lastObstacle.points[0].x + Math.random() * (maxGap - minGap) + minGap : 
+                canvas.width;
+
+            const numObstacles = Math.floor(Math.random() * 2) + 2;
+            const pattern = PATTERNS[Math.floor(Math.random() * PATTERNS.length)];
+            const positions = [];
+            if (numObstacles === 2) {
+                const gapSize = 150;
+                const topMax = canvas.height - gapSize - pattern.create(0, 0).height;
+                const y1 = Math.random() * (topMax / 2);
+                const y2 = Math.random() * (topMax / 2) + canvas.height - topMax / 2;
+                positions.push(y1, y2);
+            } else {
+                const gapSize = 120;
+                positions.push(
+                    50,
+                    canvas.height / 2 - pattern.create(0, 0).height / 2,
+                    canvas.height - pattern.create(0, 0).height - 50
+                );
+            }
+
+            positions.forEach(y => {
+                obstacles.push(pattern.create(x, y));
+            });
+        }
+
+        // Handle input
+        function handleInput(e) {
+            if (e.type === 'keydown' && e.code === 'Space') {
+                e.preventDefault();
+                if (gameOver) {
+                    resetGame();
+                } else {
+                    arrow.rotation = -45;
+                }
+            } else if (e.type === 'keyup' && e.code === 'Space') {
+                arrow.rotation = 45;
+            }
+        }
+
+        // Touch/mouse events
+        let touchActive = false;
+
+        canvas.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            if (gameOver) {
+                resetGame();
+            } else {
+                arrow.rotation = -45;
+                touchActive = true;
+            }
+        });
+
+        canvas.addEventListener('mouseup', (e) => {
+            e.preventDefault();
+            if (!gameOver) {
+                arrow.rotation = 45;
+                touchActive = false;
+            }
+        });
+
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            if (gameOver) {
+                resetGame();
+            } else {
+                arrow.rotation = -45;
+                touchActive = true;
+            }
+        });
+
+        canvas.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            if (!gameOver) {
+                arrow.rotation = 45;
+                touchActive = false;
+            }
+        });
+
+        // Prevent default touch behaviors
+        document.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false });
+
+        // Helper function to check if a point is inside a polygon
+        function isPointInPolygon(point, polygon) {
+            let inside = false;
+            for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+                const xi = polygon[i].x, yi = polygon[i].y;
+                const xj = polygon[j].x, yj = polygon[j].y;
+                const intersect = ((yi > point.y) !== (yj > point.y))
+                    && (point.x < (xj - xi) * (point.y - yi) / (yj - yi) + xi);
+                if (intersect) inside = !inside;
+            }
+            return inside;
+        }
+
+        // Helper function to get distance from point to line segment
+        function distanceToLineSegment(point, lineStart, lineEnd) {
+            const A = point.x - lineStart.x;
+            const B = point.y - lineStart.y;
+            const C = lineEnd.x - lineStart.x;
+            const D = lineEnd.y - lineStart.y;
+
+            const dot = A * C + B * D;
+            const lenSq = C * C + D * D;
+            let param = -1;
+
+            if (lenSq !== 0) param = dot / lenSq;
+
+            let xx, yy;
+
+            if (param < 0) {
+                xx = lineStart.x;
+                yy = lineStart.y;
+            } else if (param > 1) {
+                xx = lineEnd.x;
+                yy = lineEnd.y;
+            } else {
+                xx = lineStart.x + param * C;
+                yy = lineStart.y + param * D;
+            }
+
+            const dx = point.x - xx;
+            const dy = point.y - yy;
+
+            return Math.sqrt(dx * dx + dy * dy);
+        }
+
+        // Check collision
+        function checkCollision(arrow, obstacle) {
+            if (obstacle.type === 'polygon') {
+                const arrowPoint = {
+                    x: arrow.x + arrow.width / 2,
+                    y: arrow.y + arrow.height / 2
+                };
+
+                const adjustedPoints = obstacle.points.map(p => ({
+                    x: p.x - levelOffset,
+                    y: p.y
+                }));
+
+                if (isPointInPolygon(arrowPoint, adjustedPoints)) {
+                    return true;
+                }
+
+                const hitboxRadius = 5;
+                for (let i = 0; i < adjustedPoints.length; i++) {
+                    const start = adjustedPoints[i];
+                    const end = adjustedPoints[(i + 1) % adjustedPoints.length];
+                    if (distanceToLineSegment(arrowPoint, start, end) < hitboxRadius) {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        // Reset game
+        function resetGame() {
+            gameOver = false;
+            score = 0;
+            arrow.y = canvas.height / 2;
+            trail.points = [];
+            obstacles = [];
+            levelOffset = 0;
+            frameCount = 0;
+            init();
+        }
+
+        // Update game state
+        function update() {
+            if (gameOver) return;
+
+            levelOffset += arrow.forwardSpeed;
+
+            if (arrow.rotation === -45) {
+                arrow.y -= arrow.speed;
+            } else {
+                arrow.y += arrow.speed;
+            }
+
+            frameCount++;
+            if (frameCount % trail.spacing === 0) {
+                trail.points.push({
+                    x: arrow.x + arrow.width / 2,
+                    y: arrow.y + arrow.height / 2,
+                    offset: levelOffset
+                });
+
+                if (trail.points.length > trail.maxLength) {
+                    trail.points.shift();
+                }
+            }
+
+            if (arrow.y < 0) {
+                arrow.y = 0;
+                trail.points = [];
+            }
+            if (arrow.y + arrow.height > canvas.height) {
+                arrow.y = canvas.height - arrow.height;
+                trail.points = [];
+            }
+
+            for (let obstacle of obstacles) {
+                if (checkCollision(arrow, obstacle)) {
+                    gameOver = true;
+                    break;
+                }
+            }
+
+            score++;
+
+            obstacles = obstacles.filter(obstacle => {
+                const maxX = Math.max(...obstacle.points.map(p => p.x));
+                return maxX > levelOffset;
+            });
+
+            const lastObstacle = obstacles[obstacles.length - 1];
+            const lastX = lastObstacle ? Math.max(...lastObstacle.points.map(p => p.x)) : 0;
+
+            if (lastX < levelOffset + canvas.width * 2) {
+                createObstacle();
+            }
+        }
+
+        // Draw game
+        function draw() {
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            if (trail.points.length > 1) {
+                ctx.beginPath();
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+                ctx.lineWidth = 3;
+
+                for (let i = 0; i < trail.points.length - 1; i++) {
+                    const current = trail.points[i];
+                    const next = trail.points[i + 1];
+                    const x1 = current.x - (levelOffset - current.offset);
+                    const x2 = next.x - (levelOffset - next.offset);
+                    ctx.beginPath();
+                    ctx.moveTo(x1, current.y);
+                    ctx.lineTo(x2, next.y);
+                    ctx.stroke();
+                }
+            }
+
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 2;
+            obstacles.forEach(obstacle => {
+                if (obstacle.type === 'polygon') {
+                    ctx.beginPath();
+                    ctx.moveTo(
+                        obstacle.points[0].x - levelOffset,
+                        obstacle.points[0].y
+                    );
+                    for (let i = 1; i < obstacle.points.length; i++) {
+                        ctx.lineTo(
+                            obstacle.points[i].x - levelOffset,
+                            obstacle.points[i].y
+                        );
+                    }
+                    ctx.closePath();
+                    ctx.stroke();
+
+                    if (obstacle.points.length === 4) {
+                        ctx.beginPath();
+                        ctx.moveTo(
+                            (obstacle.points[0].x + obstacle.points[2].x) / 2 - levelOffset,
+                            obstacle.points[0].y
+                        );
+                        ctx.lineTo(
+                            (obstacle.points[0].x + obstacle.points[2].x) / 2 - levelOffset,
+                            obstacle.points[2].y
+                        );
+                        ctx.moveTo(
+                            obstacle.points[0].x - levelOffset,
+                            (obstacle.points[0].y + obstacle.points[2].y) / 2
+                        );
+                        ctx.lineTo(
+                            obstacle.points[2].x - levelOffset,
+                            (obstacle.points[0].y + obstacle.points[2].y) / 2
+                        );
+                        ctx.stroke();
+                    }
+                }
+            });
+
+            ctx.save();
+            ctx.translate(arrow.x + arrow.width / 2, arrow.y + arrow.height / 2);
+            ctx.rotate(arrow.rotation * Math.PI / 180);
+            ctx.fillStyle = '#fff';
+            ctx.font = '32px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('⇨', 0, 0);
+            ctx.restore();
+
+            ctx.fillStyle = '#fff';
+            ctx.font = '20px Arial';
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'alphabetic';
+            ctx.fillText(`Score: ${Math.floor(score / 10)}`, 10, 30);
+
+            if (gameOver) {
+                ctx.fillStyle = '#fff';
+                ctx.font = '40px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('Game Over!', canvas.width / 2, canvas.height / 2);
+                ctx.font = '20px Arial';
+                ctx.fillText('Tap to Restart', canvas.width / 2, canvas.height / 2 + 40);
+            }
+        }
+
+        // Game loop
+        function gameLoop() {
+            update();
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Start game
+        window.addEventListener('keydown', handleInput);
+        window.addEventListener('keyup', handleInput);
+        init();
+        gameLoop();
+    </script>
+</body>
+</html>
