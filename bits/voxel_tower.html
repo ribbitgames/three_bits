@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Voxel Tower</title>
+    <style>
+        /* Reset and base styles */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            touch-action: manipulation;
+        }
+
+        body, html {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+            background-color: #111;
+            -webkit-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+        }
+
+        #game-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            touch-action: none;
+        }
+
+        /* UI Elements */
+        #score {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            color: white;
+            font-size: 20px;
+            font-weight: bold;
+            z-index: 100;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+        }
+
+        /* Game Over Screen */
+        #game-over {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            z-index: 100;
+            max-width: 90%;
+        }
+
+        #final-score {
+            font-size: 28px;
+            font-weight: bold;
+            color: #ffcc00;
+        }
+
+        /* Start Screen */
+        #start-screen {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            z-index: 100;
+            max-width: 90%;
+        }
+
+        #start-screen h1 {
+            font-size: 32px;
+            margin-bottom: 15px;
+            color: #ffcc00;
+        }
+
+        .game-rules {
+            text-align: left;
+            margin: 10px auto;
+            max-width: 80%;
+            padding-left: 15px;
+        }
+
+        .game-rules li {
+            margin-bottom: 6px;
+            font-size: 12px;
+        }
+
+        /* Buttons */
+        button {
+            background-color: #ffcc00;
+            color: #000;
+            border: none;
+            padding: 10px 20px;
+            margin-top: 15px;
+            font-size: 16px;
+            font-weight: bold;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s, transform 0.1s;
+            touch-action: manipulation;
+        }
+
+        button:hover {
+            background-color: #ffd633;
+        }
+
+        button:active {
+            transform: scale(0.98);
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        /* Score Indicator */
+        .score-indicator {
+            position: absolute;
+            color: white;
+            font-size: 20px;
+            font-weight: bold;
+            z-index: 1000;
+            opacity: 1;
+            pointer-events: none;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <div id="score">Score: 0</div>
+        <div id="game-over" class="hidden">
+            <h2>Game Over</h2>
+            <p id="final-score">Your score: 0</p>
+            <p id="failure-reason"></p>
+            <button id="restart-button">Play Again</button>
+        </div>
+        <div id="start-screen">
+            <h1>VOXEL TOWER</h1>
+            <p>Tap/click to place blocks.<br>Stack as high as you can!</p>
+            <ul class="game-rules">
+                <li>Game gets faster as you progress</li>
+                <li>Blocks must have enough overlap</li>
+                <li>Don't miss the tower completely!</li>
+            </ul>
+            <button id="start-button">Start Game</button>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>
+    <script>
+        // Voxel Tower - A Three.js and Cannon.js physics-based stacking game
+        class VoxelTower {
+            constructor() {
+                this.score = 0;
+                this.gameOver = false;
+                this.gameStarted = false;
+                this.failureReason = "";
+                this.blockWidth = 3;
+                this.blockHeight = 1;
+                this.blockDepth = 3;
+                this.blockSpeed = 2;
+                this.direction = 1;
+                this.overhangThreshold = 1.0;
+                this.blocks = [];
+                this.fallenBlocks = [];
+                this.scoreElement = document.getElementById('score');
+                this.finalScoreElement = document.getElementById('final-score');
+                this.gameOverScreen = document.getElementById('game-over');
+                this.startScreen = document.getElementById('start-screen');
+                this.restartButton = document.getElementById('restart-button');
+                this.startButton = document.getElementById('start-button');
+                this.setupEventListeners();
+                this.initScene();
+                this.initPhysics();
+                this.initLights();
+                this.initCamera();
+                this.addBasePlatform();
+                this.animate();
+            }
+
+            setupEventListeners() {
+                window.addEventListener('mousedown', this.handleInput.bind(this));
+                window.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    this.handleInput(e);
+                }, { passive: false });
+                document.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false });
+                window.addEventListener('resize', this.onWindowResize.bind(this));
+                this.restartButton.addEventListener('click', this.restartGame.bind(this));
+                this.startButton.addEventListener('click', this.startGame.bind(this));
+            }
+
+            initScene() {
+                this.scene = new THREE.Scene();
+                this.scene.background = new THREE.Color(0x87CEEB);
+                this.renderer = new THREE.WebGLRenderer({ antialias: true });
+                this.renderer.setPixelRatio(window.devicePixelRatio);
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+                this.renderer.shadowMap.enabled = true;
+                document.getElementById('game-container').prepend(this.renderer.domElement);
+                this.scene.fog = new THREE.Fog(0x87CEEB, 10, 100);
+            }
+
+            initPhysics() {
+                this.world = new CANNON.World();
+                this.world.gravity.set(0, -9.82, 0);
+                this.world.broadphase = new CANNON.NaiveBroadphase();
+                this.world.solver.iterations = 10;
+                const groundShape = new CANNON.Plane();
+                const groundBody = new CANNON.Body({ mass: 0, shape: groundShape });
+                groundBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), -Math.PI / 2);
+                groundBody.position.set(0, -10, 0);
+                this.world.addBody(groundBody);
+            }
+
+            initLights() {
+                const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+                directionalLight.position.set(10, 20, 10);
+                directionalLight.castShadow = true;
+                directionalLight.shadow.camera.left = -20;
+                directionalLight.shadow.camera.right = 20;
+                directionalLight.shadow.camera.top = 20;
+                directionalLight.shadow.camera.bottom = -20;
+                directionalLight.shadow.camera.near = 0.5;
+                directionalLight.shadow.camera.far = 50;
+                directionalLight.shadow.mapSize.width = 2048;
+                directionalLight.shadow.mapSize.height = 2048;
+                this.scene.add(directionalLight);
+                const ambientLight = new THREE.AmbientLight(0x404040, 0.5);
+                this.scene.add(ambientLight);
+            }
+
+            initCamera() {
+                this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+                this.camera.position.set(10, 10, 10);
+                this.camera.lookAt(0, 0, 0);
+                this.cameraTargetPosition = new THREE.Vector3(0, 0, 0);
+            }
+
+            addBasePlatform() {
+                const geometry = new THREE.BoxGeometry(this.blockWidth, this.blockHeight, this.blockDepth);
+                const material = new THREE.MeshLambertMaterial({ color: 0x8B4513 });
+                const mesh = new THREE.Mesh(geometry, material);
+                mesh.position.set(0, 0, 0);
+                mesh.receiveShadow = true;
+                mesh.castShadow = true;
+                this.scene.add(mesh);
+                this.blocks.push({
+                    mesh: mesh,
+                    width: this.blockWidth,
+                    height: this.blockHeight,
+                    depth: this.blockDepth,
+                    position: new THREE.Vector3(0, 0, 0),
+                    block: null
+                });
+                this.createNewBlock();
+            }
+
+            createNewBlock() {
+                const prevBlock = this.blocks[this.blocks.length - 1];
+                const geometry = new THREE.BoxGeometry(this.blockWidth, this.blockHeight, this.blockDepth);
+                const hue = (this.score * 30) % 360;
+                const color = new THREE.Color(`hsl(${hue}, 70%, 60%)`);
+                const material = new THREE.MeshLambertMaterial({ color });
+                const mesh = new THREE.Mesh(geometry, material);
+                mesh.castShadow = true;
+                mesh.receiveShadow = true;
+                let startX = 0;
+                let startZ = 0;
+                const startY = prevBlock.position.y + this.blockHeight;
+                this.direction = (this.score % 2 === 0) ? 1 : 2;
+                if (this.direction === 1) {
+                    startX = -10;
+                    startZ = prevBlock.position.z;
+                } else {
+                    startX = prevBlock.position.x;
+                    startZ = -10;
+                }
+                mesh.position.set(startX, startY, startZ);
+                this.scene.add(mesh);
+                this.currentBlock = {
+                    mesh: mesh,
+                    width: this.blockWidth,
+                    height: this.blockHeight,
+                    depth: this.blockDepth,
+                    position: new THREE.Vector3(startX, startY, startZ),
+                    direction: this.direction,
+                    placed: false
+                };
+                this.cameraTargetPosition.y = startY;
+                this.blockSpeed = Math.min(2 + this.score / 4, 8);
+                this.overhangThreshold = Math.max(1.0 - (this.score * 0.02), 0.5);
+            }
+
+            updateScore(points = 1) {
+                this.score += points;
+                this.scoreElement.textContent = `Score: ${this.score}`;
+            }
+
+            placeBlock() {
+                if (!this.gameStarted || this.gameOver || this.currentBlock.placed) return;
+                const { mesh, direction } = this.currentBlock;
+                const prevBlock = this.blocks[this.blocks.length - 1];
+                let overhangX = 0;
+                let overhangZ = 0;
+                let dropWidth = this.blockWidth;
+                let dropDepth = this.blockDepth;
+                let alignmentScore = 0;
+                if (direction === 1) {
+                    overhangX = mesh.position.x - prevBlock.position.x;
+                    const overlap = this.blockWidth - Math.abs(overhangX);
+                    if (overlap <= 0) {
+                        this.failureReason = "Block missed the tower completely!";
+                        this.endGame();
+                        return;
+                    } else if (overlap < this.blockWidth) {
+                        dropWidth = overlap;
+                        const alignmentPercentage = 1 - (Math.abs(overhangX) / this.blockWidth);
+                        alignmentScore = Math.floor(alignmentPercentage * 3);
+                    } else {
+                        alignmentScore = 3;
+                    }
+                } else {
+                    overhangZ = mesh.position.z - prevBlock.position.z;
+                    const overlap = this.blockDepth - Math.abs(overhangZ);
+                    if (overlap <= 0) {
+                        this.failureReason = "Block missed the tower completely!";
+                        this.endGame();
+                        return;
+                    } else if (overlap < this.blockDepth) {
+                        dropDepth = overlap;
+                        const alignmentPercentage = 1 - (Math.abs(overhangZ) / this.blockDepth);
+                        alignmentScore = Math.floor(alignmentPercentage * 3);
+                    } else {
+                        alignmentScore = 3;
+                    }
+                }
+                if ((direction === 1 && dropWidth < this.blockWidth) || (direction === 2 && dropDepth < this.blockDepth)) {
+                    this.createOverhangBlock(overhangX, overhangZ, this.blockWidth - dropWidth, this.blockDepth - dropDepth, direction);
+                }
+                let newGeometry;
+                if (direction === 1) {
+                    newGeometry = new THREE.BoxGeometry(dropWidth, this.blockHeight, this.blockDepth);
+                    mesh.position.x = prevBlock.position.x + overhangX / 2;
+                } else {
+                    newGeometry = new THREE.BoxGeometry(this.blockWidth, this.blockHeight, dropDepth);
+                    mesh.position.z = prevBlock.position.z + overhangZ / 2;
+                }
+                mesh.geometry.dispose();
+                mesh.geometry = newGeometry;
+                const shape = new CANNON.Box(new CANNON.Vec3(
+                    direction === 1 ? dropWidth / 2 : this.blockWidth / 2,
+                    this.blockHeight / 2,
+                    direction === 2 ? dropDepth / 2 : this.blockDepth / 2
+                ));
+                const body = new CANNON.Body({ mass: 0, shape: shape });
+                body.position.set(mesh.position.x, mesh.position.y, mesh.position.z);
+                this.world.addBody(body);
+                this.blocks.push({
+                    mesh: mesh,
+                    width: direction === 1 ? dropWidth : this.blockWidth,
+                    height: this.blockHeight,
+                    depth: direction === 2 ? dropDepth : this.blockDepth,
+                    position: new THREE.Vector3(mesh.position.x, mesh.position.y, mesh.position.z),
+                    block: body
+                });
+                this.currentBlock.placed = true;
+                this.updateScore(1 + alignmentScore);
+                this.showFloatingScore(this.currentBlock.position, 1 + alignmentScore, alignmentScore === 3);
+                if ((direction === 1 && dropWidth < this.overhangThreshold) || (direction === 2 && dropDepth < this.overhangThreshold)) {
+                    this.failureReason = "Block too unstable - not enough overlap!";
+                    this.endGame();
+                    return;
+                }
+                this.createNewBlock();
+            }
+
+            createOverhangBlock(overhangX, overhangZ, cutWidth, cutDepth, direction) {
+                let geometry;
+                let position = new THREE.Vector3();
+                if (direction === 1) {
+                    geometry = new THREE.BoxGeometry(cutWidth, this.blockHeight, this.blockDepth);
+                    if (overhangX > 0) {
+                        position.set(
+                            this.currentBlock.mesh.position.x + (this.blockWidth - cutWidth) / 2,
+                            this.currentBlock.mesh.position.y,
+                            this.currentBlock.mesh.position.z
+                        );
+                    } else {
+                        position.set(
+                            this.currentBlock.mesh.position.x - (this.blockWidth - cutWidth) / 2,
+                            this.currentBlock.mesh.position.y,
+                            this.currentBlock.mesh.position.z
+                        );
+                    }
+                } else {
+                    geometry = new THREE.BoxGeometry(this.blockWidth, this.blockHeight, cutDepth);
+                    if (overhangZ > 0) {
+                        position.set(
+                            this.currentBlock.mesh.position.x,
+                            this.currentBlock.mesh.position.y,
+                            this.currentBlock.mesh.position.z + (this.blockDepth - cutDepth) / 2
+                        );
+                    } else {
+                        position.set(
+                            this.currentBlock.mesh.position.x,
+                            this.currentBlock.mesh.position.y,
+                            this.currentBlock.mesh.position.z - (this.blockDepth - cutDepth) / 2
+                        );
+                    }
+                }
+                const material = this.currentBlock.mesh.material.clone();
+                const mesh = new THREE.Mesh(geometry, material);
+                mesh.position.copy(position);
+                mesh.castShadow = true;
+                this.scene.add(mesh);
+                const shape = new CANNON.Box(new CANNON.Vec3(
+                    direction === 1 ? cutWidth / 2 : this.blockWidth / 2,
+                    this.blockHeight / 2,
+                    direction === 2 ? cutDepth / 2 : this.blockDepth / 2
+                ));
+                const body = new CANNON.Body({ mass: 5, shape: shape });
+                body.position.set(position.x, position.y, position.z);
+                this.world.addBody(body);
+                this.fallenBlocks.push({ mesh: mesh, body: body, timeAlive: 0 });
+            }
+
+            updatePhysics() {
+                this.world.step(1/60);
+                for (let i = this.fallenBlocks.length - 1; i >= 0; i--) {
+                    const block = this.fallenBlocks[i];
+                    block.mesh.position.copy(block.body.position);
+                    block.mesh.quaternion.copy(block.body.quaternion);
+                    block.timeAlive += 1/60;
+                    if (block.mesh.position.y < -20 || block.timeAlive > 5) {
+                        this.scene.remove(block.mesh);
+                        this.world.removeBody(block.body);
+                        block.mesh.geometry.dispose();
+                        block.mesh.material.dispose();
+                        this.fallenBlocks.splice(i, 1);
+                    }
+                }
+            }
+
+            updateCamera() {
+                const targetY = Math.max(5, this.cameraTargetPosition.y + 5);
+                this.camera.position.y += (targetY - this.camera.position.y) * 0.1;
+                this.camera.lookAt(new THREE.Vector3(0, this.cameraTargetPosition.y - 2, 0));
+            }
+
+            updateMovingBlock() {
+                if (!this.gameStarted || this.gameOver || this.currentBlock.placed) return;
+                const { mesh, direction } = this.currentBlock;
+                const amplitude = 10;
+                if (direction === 1) {
+                    mesh.position.x += this.blockSpeed * 0.1 * this.direction;
+                    if (mesh.position.x > amplitude || mesh.position.x < -amplitude) this.direction *= -1;
+                } else {
+                    mesh.position.z += this.blockSpeed * 0.1 * this.direction;
+                    if (mesh.position.z > amplitude || mesh.position.z < -amplitude) this.direction *= -1;
+                }
+            }
+
+            handleInput(event) {
+                if (event.type === 'touchstart') event.preventDefault();
+                if (!this.gameStarted) {
+                    this.startGame();
+                    return;
+                }
+                if (!this.gameOver) this.placeBlock();
+            }
+
+            startGame() {
+                this.gameStarted = true;
+                this.startScreen.classList.add('hidden');
+                if (this.score > 0) this.restartGame();
+            }
+
+            showFloatingScore(position, points, isPerfect) {
+                const scoreIndicator = document.createElement('div');
+                scoreIndicator.className = 'score-indicator';
+                scoreIndicator.textContent = `+${points}`;
+                scoreIndicator.style.color = isPerfect ? '#ffcc00' : 'white';
+                scoreIndicator.style.fontSize = isPerfect ? '24px' : '20px';
+                const viewportPosition = new THREE.Vector3(0, position.y, 0);
+                viewportPosition.project(this.camera);
+                scoreIndicator.style.left = `${(viewportPosition.x * 0.5 + 0.5) * window.innerWidth}px`;
+                scoreIndicator.style.top = `${(-viewportPosition.y * 0.5 + 0.5) * window.innerHeight - 50}px`;
+                document.getElementById('game-container').appendChild(scoreIndicator);
+                let opacity = 1;
+                let posY = parseFloat(scoreIndicator.style.top);
+                const animateScore = () => {
+                    opacity -= 0.03;
+                    posY -= 1;
+                    scoreIndicator.style.opacity = opacity;
+                    scoreIndicator.style.top = `${posY}px`;
+                    if (opacity > 0) {
+                        requestAnimationFrame(animateScore);
+                    } else if (scoreIndicator.parentNode) {
+                        scoreIndicator.parentNode.removeChild(scoreIndicator);
+                    }
+                };
+                requestAnimationFrame(animateScore);
+            }
+
+            endGame() {
+                this.gameOver = true;
+                this.finalScoreElement.textContent = `Your score: ${this.score}`;
+                const reasonElement = document.getElementById('failure-reason');
+                reasonElement.textContent = this.failureReason || "Tower collapsed!";
+                reasonElement.style.color = '#ff6b6b';
+                reasonElement.style.fontWeight = 'bold';
+                reasonElement.style.marginTop = '10px';
+                this.gameOverScreen.classList.remove('hidden');
+            }
+
+            restartGame() {
+                this.gameOverScreen.classList.add('hidden');
+                this.score = 0;
+                this.gameOver = false;
+                this.scoreElement.textContent = `Score: ${this.score}`;
+                for (const block of this.blocks) {
+                    if (block.mesh) {
+                        this.scene.remove(block.mesh);
+                        block.mesh.geometry.dispose();
+                        block.mesh.material.dispose();
+                        if (block.block) this.world.removeBody(block.block);
+                    }
+                }
+                if (this.currentBlock && this.currentBlock.mesh) {
+                    this.scene.remove(this.currentBlock.mesh);
+                    this.currentBlock.mesh.geometry.dispose();
+                    this.currentBlock.mesh.material.dispose();
+                }
+                for (const block of this.fallenBlocks) {
+                    this.scene.remove(block.mesh);
+                    block.mesh.geometry.dispose();
+                    block.mesh.material.dispose();
+                    this.world.removeBody(block.body);
+                }
+                this.blocks = [];
+                this.fallenBlocks = [];
+                this.camera.position.set(10, 10, 10);
+                this.camera.lookAt(0, 0, 0);
+                this.cameraTargetPosition.set(0, 0, 0);
+                this.addBasePlatform();
+            }
+
+            onWindowResize() {
+                this.camera.aspect = window.innerWidth / window.innerHeight;
+                this.camera.updateProjectionMatrix();
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+            }
+
+            animate() {
+                requestAnimationFrame(this.animate.bind(this));
+                this.updatePhysics();
+                this.updateMovingBlock();
+                this.updateCamera();
+                this.renderer.render(this.scene, this.camera);
+            }
+        }
+
+        window.addEventListener('load', () => new VoxelTower());
+    </script>
+</body>
+</html>
