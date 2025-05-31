@@ -95,13 +95,43 @@
             opacity: 0;
             transition: opacity 0.5s;
         }
-    </style>
+    
+#joystick-base {
+    position: absolute;
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.1);
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    display: none;
+    z-index: 5;
+    transform: translate(-50%, -50%);
+    touch-action: none;
+}
+
+#joystick-knob {
+    width: 50px;
+    height: 50px;
+    background: rgba(255, 255, 255, 0.6);
+    border-radius: 50%;
+    position: absolute;
+    top: 25px;
+    left: 25px;
+    transform: translate(-50%, -50%);
+}
+
+</style>
 </head>
 <body>
     <div id="game-container">
         <canvas id="game-canvas"></canvas>
         <div id="ui-container">
             <div id="timer">Time: <span id="time-value">60</span></div>
+        
+<div id="joystick-base">
+    <div id="joystick-knob"></div>
+</div>
+
         </div>
         <div id="start-screen">
             <h1>Marble Madness</h1>
@@ -166,6 +196,15 @@
         let levelSeed;
         let cameraTargetPosition = new THREE.Vector3();
         let cameraSmoothing = 0.1;
+
+        
+let joystickActive = false;
+let joystickOrigin = { x: 0, y: 0 };
+let joystickVector = { x: 0, y: 0 };
+
+const joystickBase = document.getElementById('joystick-base');
+const joystickKnob = document.getElementById('joystick-knob');
+
 
         // DOM elements
         const startScreen = document.getElementById('start-screen');
@@ -463,13 +502,95 @@
             isFalling = false;
         }
 
+        
+function onJoystickStart(event) {
+    if (event.touches.length !== 1 || gameState !== GAME_STATE.PLAYING) return;
+
+    joystickActive = true;
+    const touch = event.touches[0];
+    joystickOrigin.x = touch.clientX;
+    joystickOrigin.y = touch.clientY;
+    joystickVector.x = 0;
+    joystickVector.y = 0;
+
+    joystickBase.style.left = `${joystickOrigin.x}px`;
+    joystickBase.style.top = `${joystickOrigin.y}px`;
+    joystickBase.style.display = 'block';
+    updateJoystickPosition(0, 0);
+}
+
+function onJoystickMove(event) {
+    if (!joystickActive || event.touches.length !== 1) return;
+
+    const touch = event.touches[0];
+    const dx = touch.clientX - joystickOrigin.x;
+    const dy = touch.clientY - joystickOrigin.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    const maxDist = 40;
+
+    const clampedDist = Math.min(maxDist, dist);
+    const angle = Math.atan2(dy, dx);
+    joystickVector.x = Math.cos(angle) * (clampedDist / maxDist);
+    joystickVector.y = Math.sin(angle) * (clampedDist / maxDist);
+
+    updateJoystickPosition(joystickVector.x * maxDist, joystickVector.y * maxDist);
+}
+
+function onJoystickEnd(event) {
+    joystickActive = false;
+    joystickVector.x = 0;
+    joystickVector.y = 0;
+    joystickBase.style.display = 'none';
+}
+
+function updateJoystickPosition(dx, dy) {
+    joystickKnob.style.left = `${50 + dx}px`;
+    joystickKnob.style.top = `${50 + dy}px`;
+}
+
+
+        
+window.addEventListener('mousedown', (e) => {
+    if (gameState !== GAME_STATE.PLAYING) return;
+    joystickActive = true;
+    joystickOrigin.x = e.clientX;
+    joystickOrigin.y = e.clientY;
+    joystickVector.x = 0;
+    joystickVector.y = 0;
+    joystickBase.style.left = `${joystickOrigin.x}px`;
+    joystickBase.style.top = `${joystickOrigin.y}px`;
+    joystickBase.style.display = 'block';
+    updateJoystickPosition(0, 0);
+});
+
+window.addEventListener('mousemove', (e) => {
+    if (!joystickActive) return;
+    const dx = e.clientX - joystickOrigin.x;
+    const dy = e.clientY - joystickOrigin.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    const maxDist = 40;
+    const clampedDist = Math.min(maxDist, dist);
+    const angle = Math.atan2(dy, dx);
+    joystickVector.x = Math.cos(angle) * (clampedDist / maxDist);
+    joystickVector.y = Math.sin(angle) * (clampedDist / maxDist);
+    updateJoystickPosition(joystickVector.x * maxDist, joystickVector.y * maxDist);
+});
+
+window.addEventListener('mouseup', () => {
+    joystickActive = false;
+    joystickVector.x = 0;
+    joystickVector.y = 0;
+    joystickBase.style.display = 'none';
+});
+
+
         function setupEventListeners() {
             window.addEventListener('mousedown', onPointerDown);
             window.addEventListener('mousemove', onPointerMove);
             window.addEventListener('mouseup', onPointerUp);
-            window.addEventListener('touchstart', onTouchStart);
-            window.addEventListener('touchmove', onTouchMove);
-            window.addEventListener('touchend', onPointerUp);
+            window.addEventListener('touchstart', onJoystickStart);
+window.addEventListener('touchmove', onJoystickMove);
+window.addEventListener('touchend', onJoystickEnd);
             window.addEventListener('resize', onWindowResize);
             startButton.addEventListener('click', startGame);
             restartButton.addEventListener('click', restartCurrentLevel);
@@ -697,6 +818,18 @@
                     marble.position.y = targetHeight;
                 }
                 if (surfaceType !== SURFACE.NONE && !isJumping && !isFalling) {
+        const accel = 0.003;
+        const cameraRight = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+        const cameraDown = new THREE.Vector3(0, 0, 1).applyQuaternion(camera.quaternion);
+
+        marbleVelocity.x += (joystickVector.x * cameraRight.x + joystickVector.y * cameraDown.x) * accel;
+        marbleVelocity.z += (joystickVector.x * cameraRight.z + joystickVector.y * cameraDown.z) * accel;
+
+        marble.position.x += marbleVelocity.x * speedMultiplier;
+        marble.position.z += marbleVelocity.z * speedMultiplier;
+
+        marbleVelocity.x *= frictionFactor;
+        marbleVelocity.z *= frictionFactor;
                     marble.position.x += marbleVelocity.x * speedMultiplier * 0.95;
                     marble.position.z += marbleVelocity.z * speedMultiplier * 0.95;
                     marbleVelocity.x *= frictionFactor;
