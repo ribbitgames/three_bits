@@ -1,0 +1,1208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Space Shooter</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body, html {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+            background-color: #000;
+            color: #fff;
+            touch-action: none;
+        }
+
+        #game-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+        }
+
+        #game-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        #ui-container {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 10px;
+        }
+
+        #top-ui {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px;
+            background-color: rgba(0, 0, 0, 0.5);
+            border-radius: 5px;
+        }
+
+        #score, #lives {
+            font-size: 16px;
+            text-shadow: 1px 1px 2px #000;
+        }
+
+        #control-container {
+            display: flex;
+            justify-content: flex-end;
+            align-items: flex-end;
+            flex-grow: 1;
+        }
+
+        #fire-button {
+            pointer-events: auto;
+            width: 60px;
+            height: 60px;
+            background-color: rgba(255, 0, 0, 0.6);
+            border: 2px solid rgba(255, 255, 255, 0.8);
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 14px;
+            font-weight: bold;
+            margin-right: 20px;
+            margin-bottom: 20px;
+            user-select: none;
+            opacity: 0.8;
+        }
+
+        #fire-button:active {
+            background-color: rgba(255, 100, 100, 0.8);
+            transform: scale(0.95);
+        }
+
+        #power-meter {
+            display: flex;
+            flex-direction: column;
+            background-color: rgba(0, 0, 0, 0.5);
+            border: 1px solid #444;
+            padding: 5px;
+            border-radius: 3px;
+            position: absolute;
+            left: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+
+        .power-item {
+            padding: 3px 8px;
+            margin: 2px 0;
+            border-radius: 2px;
+            background-color: #333;
+            color: #ccc;
+            font-size: 12px;
+        }
+
+        .power-item.active {
+            background-color: #ffd700;
+            color: #000;
+        }
+
+        .power-item.selected {
+            background-color: #0f0;
+            color: #000;
+        }
+
+        #start-screen, #game-over-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background-color: rgba(0, 0, 0, 0.8);
+            z-index: 20;
+            cursor: pointer;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        #start-button, #restart-button {
+            background-color: #0f0;
+            color: #000;
+            border: none;
+            padding: 10px 20px;
+            font-size: 18px;
+            margin-top: 20px;
+            cursor: pointer;
+            border-radius: 5px;
+        }
+
+        #start-button:hover, #restart-button:hover {
+            background-color: #0c0;
+        }
+
+        @media (max-width: 480px) {
+            #top-ui {
+                padding: 5px;
+            }
+            
+            #score, #lives {
+                font-size: 14px;
+            }
+            
+            .power-item {
+                padding: 2px 6px;
+                font-size: 10px;
+            }
+            
+            #fire-button {
+                width: 50px;
+                height: 50px;
+                font-size: 12px;
+                margin-right: 15px;
+                margin-bottom: 15px;
+            }
+        }
+
+        @media (min-width: 768px) {
+            #top-ui {
+                width: auto;
+                max-width: 300px;
+                margin: 0 auto;
+            }
+            
+            #power-meter {
+                top: auto;
+                bottom: 10px;
+                left: 10px;
+                transform: none;
+            }
+            
+            #fire-button {
+                width: 80px;
+                height: 80px;
+                font-size: 16px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <div id="game-canvas"></div>
+        <div id="ui-container">
+            <div id="top-ui">
+                <div id="score">Score: 0</div>
+                <div id="lives">Lives: 3</div>
+            </div>
+            <div id="control-container">
+                <div id="fire-button">FIRE</div>
+            </div>
+            <div id="power-meter">
+                <div class="power-item" data-power="speed">Speed</div>
+                <div class="power-item" data-power="missile">Missile</div>
+                <div class="power-item" data-power="double">Double</div>
+                <div class="power-item" data-power="laser">Laser</div>
+                <div class="power-item" data-power="shield">Shield</div>
+            </div>
+        </div>
+        <div id="start-screen">
+            <h1>SPACE SHOOTER</h1>
+            <button id="start-button">START GAME</button>
+        </div>
+        <div id="game-over-screen" class="hidden">
+            <h1>GAME OVER</h1>
+            <div>Final Score: <span id="final-score">0</span></div>
+            <button id="restart-button">PLAY AGAIN</button>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
+    <script>
+        /**
+         * Space Shooter using Three.js
+         * Optimized for vertical phone screens, with touch/mouse controls
+         */
+
+        // Game state and constants
+        const GAME_STATE = {
+            INIT: 0,
+            PLAYING: 1,
+            GAME_OVER: 2
+        };
+
+        // Game configuration
+        const CONFIG = {
+            playerSpeed: 0.15,
+            bulletSpeed: 0.5,
+            enemySpeed: 0.05,
+            powerUpChance: 0.2,
+            enemySpawnRate: 1000,
+            maxPlayerLives: 3,
+            playerInvincibleTime: 2000,
+            fireRate: 200
+        };
+
+        // Game objects and variables
+        let scene, camera, renderer, raycaster;
+        let gameState = GAME_STATE.INIT;
+        let lastTime = 0;
+        let score = 0;
+        let lives = CONFIG.maxPlayerLives;
+        let powerLevel = 0;
+        let selectedPowerUp = -1;
+        let player, playerLight;
+        let playerPowerUps = {
+            speed: 0,
+            missile: false,
+            double: false,
+            laser: false,
+            shield: false
+        };
+
+        // Game object collections
+        let bullets = [];
+        let enemies = [];
+        let powerUps = [];
+        let explosions = [];
+        let obstacles = [];
+
+        // Timers and flags
+        let lastEnemySpawn = 0;
+        let lastFireTime = 0;
+        let isPointerDown = false;
+        let playerInvincible = false;
+        let playerInvincibleTimer = 0;
+        let gameInitialized = false;
+
+        // Screen dimensions and scaling
+        let screenWidth, screenHeight, aspectRatio;
+        let gameScale = 1;
+
+        /**
+         * Initialize game on DOM load
+         */
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log("Document loaded");
+
+            // Set up button handlers
+            const startButton = document.getElementById('start-button');
+            if (startButton) {
+                startButton.addEventListener('click', () => {
+                    console.log("Start button clicked");
+                    if (gameState === GAME_STATE.INIT) {
+                        startGame();
+                    }
+                });
+            }
+
+            const restartButton = document.getElementById('restart-button');
+            if (restartButton) {
+                restartButton.addEventListener('click', () => {
+                    resetGame();
+                });
+            }
+
+            // Set up fire button
+            const fireButton = document.getElementById('fire-button');
+            if (fireButton) {
+                const fireDown = (e) => {
+                    e.preventDefault();
+                    if (gameState === GAME_STATE.PLAYING) {
+                        isPointerDown = true;
+                        firePlayerWeapon();
+                    }
+                };
+
+                fireButton.addEventListener('mousedown', fireDown);
+                fireButton.addEventListener('touchstart', fireDown, { passive: false });
+
+                const fireUp = (e) => {
+                    e.preventDefault();
+                    isPointerDown = false;
+                };
+
+                fireButton.addEventListener('mouseup', fireUp);
+                fireButton.addEventListener('touchend', fireUp);
+            }
+
+            // Initialize game only once
+            if (!gameInitialized) {
+                init();
+                gameInitialized = true;
+            }
+        });
+
+        /**
+         * Initializes the game, sets up Three.js scene
+         */
+        function init() {
+            // Get screen dimensions
+            updateScreenDimensions();
+
+            // Create scene
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x000025);
+
+            // Setup camera for vertical orientation
+            setupCamera();
+
+            // Create renderer
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(screenWidth, screenHeight);
+            document.getElementById('game-canvas').appendChild(renderer.domElement);
+
+            // Add ambient light
+            const ambientLight = new THREE.AmbientLight(0x333333);
+            scene.add(ambientLight);
+
+            // Add distant directional light
+            const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            dirLight.position.set(0, 0, 5);
+            scene.add(dirLight);
+
+            // Create raycaster for input handling
+            raycaster = new THREE.Raycaster();
+
+            // Setup event listeners
+            window.addEventListener('resize', onWindowResize);
+
+            // Touch and mouse events for mobile-friendly controls
+            renderer.domElement.addEventListener('mousedown', onPointerDown);
+            renderer.domElement.addEventListener('touchstart', onPointerDown, { passive: false });
+
+            renderer.domElement.addEventListener('mousemove', onPointerMove);
+            renderer.domElement.addEventListener('touchmove', onPointerMove, { passive: false });
+
+            renderer.domElement.addEventListener('mouseup', onPointerUp);
+            renderer.domElement.addEventListener('touchend', onPointerUp);
+
+            renderer.domElement.addEventListener('mouseleave', onPointerUp);
+            renderer.domElement.addEventListener('touchcancel', onPointerUp);
+
+            // Create player spaceship
+            createPlayer();
+
+            // Add background stars
+            createStarfield();
+
+            // Show start screen
+            document.getElementById('start-screen').classList.remove('hidden');
+            document.getElementById('game-over-screen').classList.add('hidden');
+
+            // Update UI
+            updateScoreDisplay();
+            updateLivesDisplay();
+            updatePowerMeterDisplay();
+
+            // Start animation loop
+            animate(0);
+        }
+
+        /**
+         * Get screen dimensions and calculate scaling factors
+         */
+        function updateScreenDimensions() {
+            screenWidth = window.innerWidth;
+            screenHeight = window.innerHeight;
+            aspectRatio = screenHeight / screenWidth;
+
+            // Calculate game scale based on screen size
+            gameScale = screenWidth < 480 ? 0.8 : 1;
+        }
+
+        /**
+         * Sets up the camera based on screen dimensions
+         */
+        function setupCamera() {
+            const frustumSize = 10;
+            camera = new THREE.OrthographicCamera(
+                frustumSize / -2,
+                frustumSize / 2,
+                (frustumSize * aspectRatio) / 2,
+                (frustumSize * aspectRatio) / -2,
+                1,
+                1000
+            );
+            camera.position.z = 10;
+        }
+
+        /**
+         * Creates the player ship with lights and effects
+         */
+        function createPlayer() {
+            const shipGroup = new THREE.Group();
+
+            const bodyGeometry = new THREE.CylinderGeometry(0.15, 0.15, 0.4, 8);
+            bodyGeometry.rotateX(Math.PI / 2);
+            const bodyMaterial = new THREE.MeshPhongMaterial({
+                color: 0x3030ff,
+                emissive: 0x101080,
+                shininess: 50,
+                flatShading: false
+            });
+            const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+            shipGroup.add(body);
+
+            const noseGeometry = new THREE.ConeGeometry(0.15, 0.2, 8);
+            noseGeometry.rotateX(-Math.PI / 2);
+            const nose = new THREE.Mesh(noseGeometry, bodyMaterial);
+            nose.position.set(0, 0.3, 0);
+            shipGroup.add(nose);
+
+            const cockpitGeometry = new THREE.SphereGeometry(0.12, 8, 8);
+            const cockpitMaterial = new THREE.MeshPhongMaterial({
+                color: 0x2020a0,
+                emissive: 0x101060,
+                shininess: 80,
+                flatShading: false
+            });
+            const cockpit = new THREE.Mesh(cockpitGeometry, cockpitMaterial);
+            cockpit.position.set(0, 0.05, 0.05);
+            cockpit.scale.set(0.7, 1, 0.7);
+            shipGroup.add(cockpit);
+
+            const wingGeometry = new THREE.BoxGeometry(0.5, 0.05, 0.3);
+            const wingMaterial = new THREE.MeshPhongMaterial({
+                color: 0x3040c0,
+                emissive: 0x101060,
+                shininess: 30,
+                flatShading: true
+            });
+            const leftWing = new THREE.Mesh(wingGeometry, wingMaterial);
+            leftWing.position.set(-0.15, 0, -0.05);
+            shipGroup.add(leftWing);
+            const rightWing = new THREE.Mesh(wingGeometry, wingMaterial);
+            rightWing.position.set(0.15, 0, -0.05);
+            shipGroup.add(rightWing);
+
+            const engineGeometry = new THREE.CylinderGeometry(0.05, 0.08, 0.1, 8);
+            const engineMaterial = new THREE.MeshPhongMaterial({
+                color: 0xff5500,
+                emissive: 0xff2200,
+                shininess: 100,
+                flatShading: false
+            });
+            const leftEngine = new THREE.Mesh(engineGeometry, engineMaterial);
+            leftEngine.position.set(-0.1, -0.25, 0);
+            shipGroup.add(leftEngine);
+            const rightEngine = new THREE.Mesh(engineGeometry, engineMaterial);
+            rightEngine.position.set(0.1, -0.25, 0);
+            shipGroup.add(rightEngine);
+
+            const engineLight = new THREE.PointLight(0xff5500, 1, 1);
+            engineLight.position.set(0, -0.3, 0);
+            shipGroup.add(engineLight);
+
+            player = shipGroup;
+            player.position.set(0, -6, 0);
+            scene.add(player);
+
+            playerLight = new THREE.PointLight(0x3030ff, 1, 3);
+            playerLight.position.copy(player.position);
+            scene.add(playerLight);
+
+            const shieldGeometry = new THREE.SphereGeometry(0.4, 8, 8);
+            const shieldMaterial = new THREE.MeshBasicMaterial({
+                color: 0x00ffff,
+                transparent: true,
+                opacity: 0.3,
+                wireframe: true
+            });
+            player.shield = new THREE.Mesh(shieldGeometry, shieldMaterial);
+            player.shield.visible = false;
+            player.add(player.shield);
+        }
+
+        /**
+         * Creates a starfield background using particle system
+         */
+        function createStarfield() {
+            const layerCount = 3;
+            const starCounts = [100, 80, 60];
+            const starSpeeds = [0.02, 0.05, 0.1];
+            const starSizes = [0.02, 0.03, 0.05];
+            window.starLayers = [];
+
+            for (let layer = 0; layer < layerCount; layer++) {
+                const starCount = starCounts[layer];
+                const starGeometry = new THREE.BufferGeometry();
+                const starPositions = new Float32Array(starCount * 3);
+
+                for (let i = 0; i < starCount; i++) {
+                    const i3 = i * 3;
+                    starPositions[i3] = Math.random() * 16 - 8;
+                    starPositions[i3 + 1] = Math.random() * 20 - 10;
+                    starPositions[i3 + 2] = -5 - layer * 2;
+                }
+
+                starGeometry.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
+                const starMaterial = new THREE.PointsMaterial({
+                    color: 0xffffff,
+                    size: starSizes[layer],
+                    transparent: true,
+                    opacity: 0.8,
+                    sizeAttenuation: true
+                });
+                const stars = new THREE.Points(starGeometry, starMaterial);
+                stars.scrollSpeed = starSpeeds[layer];
+                stars.positions = starPositions;
+                scene.add(stars);
+                window.starLayers.push(stars);
+            }
+
+            obstacles.forEach(obstacle => scene.remove(obstacle));
+            obstacles = [];
+            createScrollingObstacles();
+        }
+
+        /**
+         * Creates scrolling obstacles
+         */
+        function createScrollingObstacles() {
+            const wallGeometry = new THREE.BoxGeometry(2, 0.5, 0.5);
+            const wallMaterial = new THREE.MeshPhongMaterial({
+                color: 0x707070,
+                emissive: 0x202020,
+                shininess: 30
+            });
+
+            for (let y = -6; y < 20; y += 4) {
+                const leftWall = new THREE.Mesh(wallGeometry, wallMaterial);
+                leftWall.position.set(-4, y, 0);
+                leftWall.scrollSpeed = 0.1;
+                scene.add(leftWall);
+                obstacles.push(leftWall);
+
+                const rightWall = new THREE.Mesh(wallGeometry, wallMaterial);
+                rightWall.position.set(4, y, 0);
+                rightWall.scrollSpeed = 0.1;
+                scene.add(rightWall);
+                obstacles.push(rightWall);
+            }
+
+            const obstacleCount = 8;
+            const obstacleGeometry = new THREE.TetrahedronGeometry(0.3);
+            const obstacleMaterial = new THREE.MeshPhongMaterial({
+                color: 0xa04040,
+                emissive: 0x401010
+            });
+
+            for (let i = 0; i < obstacleCount; i++) {
+                const obstacle = new THREE.Mesh(obstacleGeometry, obstacleMaterial);
+                obstacle.position.set(
+                    Math.random() * 6 - 3,
+                    Math.random() * 20 - 5,
+                    0
+                );
+                obstacle.rotation.set(
+                    Math.random() * Math.PI,
+                    Math.random() * Math.PI,
+                    Math.random() * Math.PI
+                );
+                obstacle.scrollSpeed = 0.08 + Math.random() * 0.04;
+                scene.add(obstacle);
+                obstacles.push(obstacle);
+            }
+        }
+
+        /**
+         * Window resize handler
+         */
+        function onWindowResize() {
+            updateScreenDimensions();
+            const frustumSize = 10;
+            camera.left = frustumSize / -2;
+            camera.right = frustumSize / 2;
+            camera.top = (frustumSize * aspectRatio) / 2;
+            camera.bottom = (frustumSize * aspectRatio) / -2;
+            camera.updateProjectionMatrix();
+            renderer.setSize(screenWidth, screenHeight);
+        }
+
+        /**
+         * Pointer down event handler (both mouse and touch)
+         */
+        function onPointerDown(event) {
+            event.preventDefault();
+            if (gameState === GAME_STATE.PLAYING) {
+                isPointerDown = true;
+                updatePlayerTarget(event);
+                firePlayerWeapon();
+            }
+        }
+
+        /**
+         * Pointer move event handler (both mouse and touch)
+         */
+        function onPointerMove(event) {
+            event.preventDefault();
+            if (gameState !== GAME_STATE.PLAYING || !isPointerDown) return;
+            updatePlayerTarget(event);
+        }
+
+        /**
+         * Pointer up event handler (both mouse and touch)
+         */
+        function onPointerUp(event) {
+            if (event.preventDefault) {
+                event.preventDefault();
+            }
+            isPointerDown = false;
+        }
+
+        /**
+         * Update player target position from pointer event
+         */
+        function updatePlayerTarget(event) {
+            const pointer = {};
+            if (event.type.startsWith('touch')) {
+                pointer.x = (event.touches[0].clientX / window.innerWidth) * 2 - 1;
+                pointer.y = -(event.touches[0].clientY / window.innerHeight) * 2 + 1;
+            } else {
+                pointer.x = (event.clientX / window.innerWidth) * 2 - 1;
+                pointer.y = -(event.clientY / window.innerHeight) * 2 + 1;
+            }
+            const vector = new THREE.Vector3(pointer.x, pointer.y, 0);
+            vector.unproject(camera);
+            player.targetX = vector.x;
+        }
+
+        /**
+         * Starts the game
+         */
+        function startGame() {
+            console.log("startGame called, changing state to PLAYING");
+            gameState = GAME_STATE.PLAYING;
+            score = 0;
+            lives = CONFIG.maxPlayerLives;
+            powerLevel = 0;
+            selectedPowerUp = -1;
+            playerPowerUps = {
+                speed: 0,
+                missile: false,
+                double: false,
+                laser: false,
+                shield: false
+            };
+            clearGameObjects();
+            player.position.set(0, -6, 0);
+            player.shield.visible = false;
+            updateScoreDisplay();
+            updateLivesDisplay();
+            updatePowerMeterDisplay();
+            document.getElementById('start-screen').classList.add('hidden');
+        }
+
+        /**
+         * Resets the game after game over
+         */
+        function resetGame() {
+            document.getElementById('game-over-screen').classList.add('hidden');
+            startGame();
+        }
+
+        /**
+         * Clears all game objects for reset
+         */
+        function clearGameObjects() {
+            bullets.forEach(bullet => scene.remove(bullet));
+            bullets = [];
+            enemies.forEach(enemy => scene.remove(enemy));
+            enemies = [];
+            powerUps.forEach(powerUp => scene.remove(powerUp));
+            powerUps = [];
+            explosions.forEach(explosion => scene.remove(explosion));
+            explosions = [];
+            for (let i = obstacles.length - 1; i >= 10; i--) {
+                scene.remove(obstacles[i]);
+                obstacles.splice(i, 1);
+            }
+        }
+
+        /**
+         * Game over handler
+         */
+        function gameOver() {
+            gameState = GAME_STATE.GAME_OVER;
+            document.getElementById('final-score').textContent = score;
+            document.getElementById('game-over-screen').classList.remove('hidden');
+        }
+
+        /**
+         * Update score display
+         */
+        function updateScoreDisplay() {
+            document.getElementById('score').textContent = `Score: ${score}`;
+        }
+
+        /**
+         * Update lives display
+         */
+        function updateLivesDisplay() {
+            document.getElementById('lives').textContent = `Lives: ${lives}`;
+        }
+
+        /**
+         * Update power meter display
+         */
+        function updatePowerMeterDisplay() {
+            const powerItems = document.querySelectorAll('.power-item');
+            powerItems.forEach((item, index) => {
+                item.classList.remove('active', 'selected');
+                const powerType = item.dataset.power;
+                if (playerPowerUps[powerType] === true || (powerType === 'speed' && playerPowerUps.speed > 0)) {
+                    item.classList.add('active');
+                }
+                if (index === powerLevel) {
+                    item.classList.add('selected');
+                }
+            });
+        }
+
+        /**
+         * Creates an enemy at a random position
+         */
+        function spawnEnemy() {
+            const enemyTypes = [
+                {
+                    geometry: new THREE.BoxGeometry(0.3, 0.3, 0.3),
+                    color: 0xff0000,
+                    emissive: 0x500000,
+                    health: 1,
+                    score: 100
+                },
+                {
+                    geometry: new THREE.SphereGeometry(0.2, 8, 8),
+                    color: 0xff5500,
+                    emissive: 0x551500,
+                    health: 2,
+                    score: 200
+                },
+                {
+                    geometry: new THREE.TetrahedronGeometry(0.25),
+                    color: 0xff0055,
+                    emissive: 0x550015,
+                    health: 3,
+                    score: 300
+                }
+            ];
+            const enemyType = enemyTypes[Math.floor(Math.random() * enemyTypes.length)];
+            const material = new THREE.MeshPhongMaterial({
+                color: enemyType.color,
+                emissive: enemyType.emissive,
+                shininess: 30
+            });
+            const enemy = new THREE.Mesh(enemyType.geometry, material);
+            enemy.position.set(
+                Math.random() * 8 - 4,
+                5 + Math.random() * 2,
+                0
+            );
+            enemy.health = enemyType.health;
+            enemy.score = enemyType.score;
+            enemy.speed = CONFIG.enemySpeed;
+            scene.add(enemy);
+            enemies.push(enemy);
+        }
+
+        /**
+         * Fire player weapon based on current power-ups
+         */
+        function firePlayerWeapon() {
+            const bulletGeometry = new THREE.SphereGeometry(0.1, 8, 8);
+            const bulletMaterial = new THREE.MeshBasicMaterial({ color: 0x00ffff });
+
+            function createBullet(offsetX = 0) {
+                const bullet = new THREE.Mesh(bulletGeometry, bulletMaterial);
+                bullet.position.set(player.position.x + offsetX, player.position.y + 0.3, 0);
+                bullet.speed = CONFIG.bulletSpeed;
+                bullet.power = playerPowerUps.laser ? 2 : 1;
+                scene.add(bullet);
+                bullets.push(bullet);
+            }
+
+            createBullet();
+            if (playerPowerUps.double) {
+                createBullet(0.2);
+                createBullet(-0.2);
+            }
+
+            if (playerPowerUps.missile) {
+                const missileGeometry = new THREE.ConeGeometry(0.1, 0.2, 4);
+                missileGeometry.rotateX(-Math.PI / 2);
+                const missileMaterial = new THREE.MeshBasicMaterial({ color: 0xffaa00 });
+                const missile = new THREE.Mesh(missileGeometry, missileMaterial);
+                missile.position.set(player.position.x - 0.3, player.position.y, 0);
+                missile.speed = CONFIG.bulletSpeed * 0.7;
+                missile.power = 3;
+                missile.isMissile = true;
+                scene.add(missile);
+                bullets.push(missile);
+            }
+        }
+
+        /**
+         * Collect power-up and apply effect
+         */
+        function collectPowerUp(powerUp) {
+            powerLevel++;
+            const powerItems = document.querySelectorAll('.power-item');
+            if (powerLevel <= powerItems.length) {
+                const powerType = powerItems[powerLevel - 1].dataset.power;
+                applyPowerUp(powerType);
+            }
+            updatePowerMeterDisplay();
+            scene.remove(powerUp);
+            powerUps.splice(powerUps.indexOf(powerUp), 1);
+        }
+
+        /**
+         * Apply power-up effect
+         */
+        function applyPowerUp(powerType) {
+            switch (powerType) {
+                case 'speed':
+                    playerPowerUps.speed = Math.min(playerPowerUps.speed + 1, 3);
+                    break;
+                case 'missile':
+                    playerPowerUps.missile = true;
+                    break;
+                case 'double':
+                    playerPowerUps.double = true;
+                    break;
+                case 'laser':
+                    playerPowerUps.laser = true;
+                    break;
+                case 'shield':
+                    playerPowerUps.shield = true;
+                    player.shield.visible = true;
+                    break;
+            }
+        }
+
+        /**
+         * Create explosion effect at position
+         */
+        function createExplosion(position, size = 1, color = 0xffaa00) {
+            const particleCount = 10;
+            const explosionGeometry = new THREE.BufferGeometry();
+            const explosionPositions = new Float32Array(particleCount * 3);
+
+            for (let i = 0; i < particleCount; i++) {
+                const i3 = i * 3;
+                explosionPositions[i3] = position.x;
+                explosionPositions[i3 + 1] = position.y;
+                explosionPositions[i3 + 2] = position.z;
+            }
+
+            explosionGeometry.setAttribute('position', new THREE.BufferAttribute(explosionPositions, 3));
+            const explosionMaterial = new THREE.PointsMaterial({
+                color: color,
+                size: 0.1 * size,
+                transparent: true,
+                opacity: 1
+            });
+            const explosion = new THREE.Points(explosionGeometry, explosionMaterial);
+            explosion.userData.age = 0;
+            explosion.userData.size = size;
+            explosion.userData.particlePositions = explosionPositions;
+            scene.add(explosion);
+            explosions.push(explosion);
+        }
+
+        /**
+         * Check collisions between game objects
+         */
+        function checkCollisions() {
+            for (let i = bullets.length - 1; i >= 0; i--) {
+                const bullet = bullets[i];
+                for (let j = enemies.length - 1; j >= 0; j--) {
+                    const enemy = enemies[j];
+                    const distance = bullet.position.distanceTo(enemy.position);
+                    if (distance < 0.3) {
+                        enemy.health -= bullet.power;
+                        scene.remove(bullet);
+                        bullets.splice(i, 1);
+                        createExplosion(bullet.position, 0.5, 0x00ffff);
+                        if (enemy.health <= 0) {
+                            score += enemy.score;
+                            updateScoreDisplay();
+                            createExplosion(enemy.position);
+                            if (Math.random() < CONFIG.powerUpChance) {
+                                createPowerUp(enemy.position);
+                            }
+                            scene.remove(enemy);
+                            enemies.splice(j, 1);
+                        }
+                        break;
+                    }
+                }
+                for (let j = obstacles.length - 1; j >= 0; j--) {
+                    const obstacle = obstacles[j];
+                    const distance = bullet.position.distanceTo(obstacle.position);
+                    if (distance < 0.4) {
+                        if (bullet.isMissile) {
+                            createExplosion(obstacle.position, 1.5, 0xff5500);
+                            scene.remove(obstacle);
+                            obstacles.splice(j, 1);
+                        }
+                        scene.remove(bullet);
+                        bullets.splice(i, 1);
+                        createExplosion(bullet.position, 0.5, 0x00ffff);
+                        break;
+                    }
+                }
+            }
+
+            if (playerInvincible) return;
+
+            for (let i = enemies.length - 1; i >= 0; i--) {
+                const enemy = enemies[i];
+                const distance = player.position.distanceTo(enemy.position);
+                if (distance < 0.4) {
+                    createExplosion(enemy.position);
+                    scene.remove(enemy);
+                    enemies.splice(i, 1);
+                    handlePlayerHit();
+                    break;
+                }
+            }
+
+            for (let i = obstacles.length - 1; i >= 0; i--) {
+                const obstacle = obstacles[i];
+                const distance = player.position.distanceTo(obstacle.position);
+                if (distance < 0.4) {
+                    handlePlayerHit();
+                    break;
+                }
+            }
+
+            for (let i = powerUps.length - 1; i >= 0; i--) {
+                const powerUp = powerUps[i];
+                const distance = player.position.distanceTo(powerUp.position);
+                if (distance < 0.4) {
+                    collectPowerUp(powerUp);
+                }
+            }
+        }
+
+        /**
+         * Handle player being hit
+         */
+        function handlePlayerHit() {
+            if (playerPowerUps.shield) {
+                playerPowerUps.shield = false;
+                player.shield.visible = false;
+                createExplosion(player.position, 1, 0x00ffff);
+                playerInvincible = true;
+                playerInvincibleTimer = CONFIG.playerInvincibleTime / 2;
+                return;
+            }
+            lives--;
+            updateLivesDisplay();
+            createExplosion(player.position, 1.5, 0x3030ff);
+            if (lives <= 0) {
+                gameOver();
+                return;
+            }
+            playerInvincible = true;
+            playerInvincibleTimer = CONFIG.playerInvincibleTime;
+            player.position.set(0, -6, 0);
+        }
+
+        /**
+         * Create power-up pickup
+         */
+        function createPowerUp(position) {
+            const powerUpGeometry = new THREE.OctahedronGeometry(0.15);
+            const powerUpMaterial = new THREE.MeshPhongMaterial({
+                color: 0xffff00,
+                emissive: 0x555500,
+                shininess: 80
+            });
+            const powerUp = new THREE.Mesh(powerUpGeometry, powerUpMaterial);
+            powerUp.position.copy(position);
+            scene.add(powerUp);
+            powerUps.push(powerUp);
+        }
+
+        /**
+         * Main animation loop
+         */
+        function animate(time) {
+            requestAnimationFrame(animate);
+            const delta = lastTime ? (time - lastTime) / 1000 : 0;
+            lastTime = time;
+            if (gameState === GAME_STATE.PLAYING) {
+                updateGame(delta, time);
+            }
+            renderer.render(scene, camera);
+        }
+
+        /**
+         * Update game state
+         */
+        function updateGame(delta, time) {
+            if (player.targetX !== undefined) {
+                const playerSpeedFactor = 1 + (playerPowerUps.speed * 0.5);
+                const targetDistance = player.targetX - player.position.x;
+                const moveStep = CONFIG.playerSpeed * playerSpeedFactor * delta * 60;
+                if (Math.abs(targetDistance) > moveStep) {
+                    player.position.x += Math.sign(targetDistance) * moveStep;
+                } else {
+                    player.position.x = player.targetX;
+                }
+                player.position.x = Math.max(-4.5, Math.min(4.5, player.position.x));
+            }
+
+            playerLight.position.copy(player.position);
+
+            if (isPointerDown && gameState === GAME_STATE.PLAYING) {
+                const currentTime = performance.now();
+                if (currentTime - lastFireTime >= CONFIG.fireRate) {
+                    firePlayerWeapon();
+                    lastFireTime = currentTime;
+                }
+            }
+
+            if (playerInvincible) {
+                playerInvincibleTimer -= delta * 1000;
+                player.visible = Math.floor(time / 100) % 2 === 0;
+                if (playerInvincibleTimer <= 0) {
+                    playerInvincible = false;
+                    player.visible = true;
+                }
+            }
+
+            if (window.starLayers) {
+                window.starLayers.forEach(starLayer => {
+                    const positions = starLayer.positions;
+                    const count = positions.length / 3;
+                    for (let i = 0; i < count; i++) {
+                        const i3 = i * 3;
+                        positions[i3 + 1] -= starLayer.scrollSpeed * delta * 60;
+                        if (positions[i3 + 1] < -10) {
+                            positions[i3 + 1] = 10;
+                            positions[i3] = Math.random() * 16 - 8;
+                        }
+                    }
+                    starLayer.geometry.attributes.position.needsUpdate = true;
+                });
+            }
+
+            for (let i = obstacles.length - 1; i >= 0; i--) {
+                const obstacle = obstacles[i];
+                obstacle.position.y -= obstacle.scrollSpeed * delta * 60;
+                obstacle.rotation.x += delta * 0.2;
+                obstacle.rotation.z += delta * 0.3;
+                if (obstacle.position.y < -10) {
+                    if (Math.abs(obstacle.position.x) === 4) {
+                        obstacle.position.y = 14;
+                    } else {
+                        obstacle.position.y = 10 + Math.random() * 5;
+                        obstacle.position.x = Math.random() * 6 - 3;
+                        obstacle.rotation.set(
+                            Math.random() * Math.PI,
+                            Math.random() * Math.PI,
+                            Math.random() * Math.PI
+                        );
+                    }
+                }
+            }
+
+            for (let i = bullets.length - 1; i >= 0; i--) {
+                const bullet = bullets[i];
+                bullet.position.y += bullet.speed * delta * 60;
+                if (bullet.isMissile && enemies.length > 0) {
+                    let closestEnemy = null;
+                    let closestDistance = Infinity;
+                    for (const enemy of enemies) {
+                        if (enemy.position.y > bullet.position.y) {
+                            const distance = bullet.position.distanceTo(enemy.position);
+                            if (distance < closestDistance) {
+                                closestDistance = distance;
+                                closestEnemy = enemy;
+                            }
+                        }
+                    }
+                    if (closestEnemy && closestDistance < 5) {
+                        const targetX = closestEnemy.position.x;
+                        const xDiff = targetX - bullet.position.x;
+                        bullet.position.x += Math.sign(xDiff) * bullet.speed * 0.5 * delta * 60;
+                    }
+                }
+                if (bullet.position.y > 6) {
+                    scene.remove(bullet);
+                    bullets.splice(i, 1);
+                }
+            }
+
+            for (let i = enemies.length - 1; i >= 0; i--) {
+                const enemy = enemies[i];
+                enemy.position.y -= enemy.speed * delta * 60;
+                enemy.position.x += Math.sin(time * 0.001 + enemy.position.y) * enemy.speed * 0.5 * delta * 60;
+                enemy.rotation.x += delta;
+                enemy.rotation.z += delta * 0.5;
+                if (enemy.position.y < -6) {
+                    scene.remove(enemy);
+                    enemies.splice(i, 1);
+                }
+            }
+
+            for (let i = powerUps.length - 1; i >= 0; i--) {
+                const powerUp = powerUps[i];
+                powerUp.position.y -= CONFIG.enemySpeed * 0.5 * delta * 60;
+                powerUp.rotation.x += delta * 2;
+                powerUp.rotation.y += delta * 2;
+                powerUp.rotation.z += delta * 2;
+                if (powerUp.position.y < -6) {
+                    scene.remove(powerUp);
+                    powerUps.splice(i, 1);
+                }
+            }
+
+            for (let i = explosions.length - 1; i >= 0; i--) {
+                const explosion = explosions[i];
+                explosion.userData.age += delta;
+                const positions = explosion.userData.particlePositions;
+                const particleCount = positions.length / 3;
+                for (let j = 0; j < particleCount; j++) {
+                    const j3 = j * 3;
+                    positions[j3] += (Math.random() - 0.5) * explosion.userData.size * delta * 2;
+                    positions[j3 + 1] += (Math.random() - 0.5) * explosion.userData.size * delta * 2;
+                    positions[j3 + 2] += (Math.random() - 0.5) * explosion.userData.size * delta * 0.5;
+                }
+                explosion.geometry.attributes.position.needsUpdate = true;
+                explosion.material.opacity = 1 - (explosion.userData.age * 2);
+                if (explosion.userData.age > 0.5) {
+                    scene.remove(explosion);
+                    explosions.splice(i, 1);
+                }
+            }
+
+            checkCollisions();
+
+            if (time - lastEnemySpawn > CONFIG.enemySpawnRate) {
+                spawnEnemy();
+                lastEnemySpawn = time;
+                CONFIG.enemySpawnRate = Math.max(300, CONFIG.enemySpawnRate - 5);
+            }
+        }
+    </script>
+</body>
+</html>
