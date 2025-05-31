@@ -1,0 +1,777 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Marble Madness</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            overflow: hidden;
+            background-color: #000;
+            font-family: Arial, sans-serif;
+            touch-action: none;
+            margin: 0;
+        }
+
+        #game-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        #game-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        #ui-container {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            z-index: 2;
+            color: white;
+            font-size: 18px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.7);
+        }
+
+        #timer {
+            margin-bottom: 5px;
+        }
+
+        #start-screen, #end-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background-color: rgba(0, 0, 0, 0.8);
+            color: white;
+            z-index: 3;
+        }
+
+        #end-screen {
+            display: none;
+        }
+
+        h1, h2 {
+            margin-bottom: 30px;
+            font-size: 36px;
+            text-align: center;
+        }
+
+        button {
+            padding: 15px 30px;
+            font-size: 18px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+            touch-action: manipulation;
+        }
+
+        button:hover {
+            background-color: #45a049;
+        }
+
+        #status {
+            font-size: 24px;
+            text-align: center;
+            opacity: 0;
+            transition: opacity 0.5s;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <canvas id="game-canvas"></canvas>
+        <div id="ui-container">
+            <div id="timer">Time: <span id="time-value">60</span></div>
+        </div>
+        <div id="start-screen">
+            <h1>Marble Madness</h1>
+            <button id="start-button">Start Game</button>
+        </div>
+        <div id="end-screen">
+            <h2 id="end-message"></h2>
+            <button id="restart-button">Play Again</button>
+        </div>
+        <div id="status"></div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // Game constants
+        const GAME_STATE = {
+            MENU: 0,
+            PLAYING: 1,
+            GAME_OVER: 2,
+            WIN: 3
+        };
+
+        // Game settings
+        const SETTINGS = {
+            marbleRadius: 0.5,
+            cameraDistance: 15,
+            timeLimit: 60,
+            gravity: 0.015,
+            iceMultiplier: 1.5,
+            stickyMultiplier: 0.5,
+            enemyStartLevel: 3,
+            maxLevels: 5
+        };
+
+        // Surface types
+        const SURFACE = {
+            NONE: 0,
+            NORMAL: 1,
+            START: 2,
+            GOAL: 3,
+            ICE: 4,
+            STICKY: 5,
+            ENEMY: 6,
+            ACID: 7,
+            ELEVATED: 8
+        };
+
+        // Game variables
+        let renderer, scene, camera;
+        let marble;
+        let level, levelGroup;
+        let startTime, timeLeft;
+        let gameState = GAME_STATE.MENU;
+        let marbleVelocity = { x: 0, z: 0, y: 0 };
+        let isPointerDown = false;
+        let lastPointerPosition = { x: 0, y: 0 };
+        let enemies = [];
+        let isJumping = false;
+        let isFalling = false;
+        let currentLevel = 1;
+        let enemySpeed = 0.05;
+        let levelSeed;
+        let cameraTargetPosition = new THREE.Vector3();
+        let cameraSmoothing = 0.1;
+
+        // DOM elements
+        const startScreen = document.getElementById('start-screen');
+        const endScreen = document.getElementById('end-screen');
+        const startButton = document.getElementById('start-button');
+        const restartButton = document.getElementById('restart-button');
+        const endMessage = document.getElementById('end-message');
+        const timeValue = document.getElementById('time-value');
+        const statusEl = document.getElementById('status');
+
+        function init() {
+            renderer = new THREE.WebGLRenderer({
+                canvas: document.getElementById('game-canvas'),
+                antialias: true
+            });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setClearColor(0x000000);
+
+            scene = new THREE.Scene();
+
+            const aspect = window.innerWidth / window.innerHeight;
+            const viewSize = window.innerHeight > window.innerWidth ? 10 : 5;
+            camera = new THREE.OrthographicCamera(
+                -viewSize * aspect, viewSize * aspect, viewSize, -viewSize, 0.1, 1000
+            );
+            camera.position.set(SETTINGS.cameraDistance, SETTINGS.cameraDistance, SETTINGS.cameraDistance);
+            camera.lookAt(0, 0, 0);
+
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(10, 20, 10);
+            directionalLight.castShadow = true;
+            scene.add(directionalLight);
+
+            setupEventListeners();
+            animate();
+        }
+
+        class SeededRandom {
+            constructor(seed) {
+                this.seed = seed;
+            }
+            random() {
+                const x = Math.sin(this.seed++) * 10000;
+                return x - Math.floor(x);
+            }
+            randomInt(min, max) {
+                return Math.floor(this.random() * (max - min + 1)) + min;
+            }
+            randomFloat(min, max) {
+                return this.random() * (max - min) + min;
+            }
+            randomBool(probability = 0.5) {
+                return this.random() < probability;
+            }
+            randomItem(array) {
+                return array[this.randomInt(0, array.length - 1)];
+            }
+        }
+
+        function generateProceduralLevel(level) {
+            levelSeed = level * 1000 + Math.floor(Math.random() * 1000);
+            const rng = new SeededRandom(levelSeed);
+            const width = 10 + Math.min(6, Math.floor(level * 0.5));
+            const height = 15 + Math.min(8, Math.floor(level * 0.7));
+            let grid = Array(height).fill().map(() => Array(width).fill(SURFACE.NONE));
+
+            const params = {
+                ice: Math.min(0.02 + (level - 1) * 0.03, 0.20),
+                sticky: Math.min(0.02 + (level - 1) * 0.02, 0.15),
+                acid: level > 1 ? Math.min(0.01 + (level - 2) * 0.02, 0.12) : 0,
+                elevated: Math.min(0.02 + (level - 1) * 0.03, 0.18),
+                empty: Math.min(0.1 + (level - 1) * 0.02, 0.25),
+                enemies: level >= SETTINGS.enemyStartLevel ? Math.min(level - SETTINGS.enemyStartLevel + 1, 5) : 0,
+                pathTurns: 3 + Math.min(level, 7),
+                pathWidth: Math.max(2, 4 - Math.floor(level / 2))
+            };
+
+            const startX = rng.randomInt(1, width - 2);
+            const startY = rng.randomInt(1, Math.floor(height / 4));
+            const goalY = rng.randomInt(Math.floor(height * 3 / 4), height - 2);
+            let goalX = startX < width / 2 ? rng.randomInt(Math.floor(width * 2 / 3), width - 2) : rng.randomInt(1, Math.floor(width / 3));
+
+            const path = generatePath(rng, width, height, startX, startY, goalX, goalY, params.pathTurns);
+            const playableArea = new Set();
+
+            for (const point of path) {
+                const key = `${point.x},${point.y}`;
+                playableArea.add(key);
+                for (let dx = -Math.floor(params.pathWidth / 2); dx <= Math.floor(params.pathWidth / 2); dx++) {
+                    for (let dy = -Math.floor(params.pathWidth / 2); dy <= Math.floor(params.pathWidth / 2); dy++) {
+                        const nx = point.x + dx;
+                        const ny = point.y + dy;
+                        if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+                            playableArea.add(`${nx},${ny}`);
+                        }
+                    }
+                }
+            }
+
+            for (const key of playableArea) {
+                const [x, y] = key.split(',').map(Number);
+                grid[y][x] = SURFACE.NORMAL;
+            }
+
+            grid[startY][startX] = SURFACE.START;
+            grid[goalY][goalX] = SURFACE.GOAL;
+
+            for (let y = 0; y < height; y++) {
+                for (let x = 0; x < width; x++) {
+                    if (grid[y][x] === SURFACE.NORMAL) {
+                        const isPathTile = path.some(p => p.x === x && p.y === y);
+                        if (isPathTile && rng.random() < 0.8) continue;
+                        const roll = rng.random();
+                        if (roll < params.empty) {
+                            grid[y][x] = SURFACE.NONE;
+                        } else if (roll < params.empty + params.ice) {
+                            grid[y][x] = SURFACE.ICE;
+                        } else if (roll < params.empty + params.ice + params.sticky) {
+                            grid[y][x] = SURFACE.STICKY;
+                        } else if (roll < params.empty + params.ice + params.sticky + params.acid) {
+                            grid[y][x] = SURFACE.ACID;
+                        } else if (roll < params.empty + params.ice + params.sticky + params.acid + params.elevated) {
+                            grid[y][x] = SURFACE.ELEVATED;
+                        }
+                    }
+                }
+            }
+
+            if (params.enemies > 0) {
+                const potentialEnemySpots = [];
+                for (let y = 0; y < height; y++) {
+                    for (let x = 0; x < width; x++) {
+                        if (grid[y][x] === SURFACE.NORMAL) {
+                            const dist = Math.sqrt(Math.pow(x - startX, 2) + Math.pow(y - startY, 2));
+                            if (dist > 4) {
+                                potentialEnemySpots.push({ x, y });
+                            }
+                        }
+                    }
+                }
+                for (let i = potentialEnemySpots.length - 1; i > 0; i--) {
+                    const j = Math.floor(rng.random() * (i + 1));
+                    [potentialEnemySpots[i], potentialEnemySpots[j]] = [potentialEnemySpots[j], potentialEnemySpots[i]];
+                }
+                for (let i = 0; i < Math.min(params.enemies, potentialEnemySpots.length); i++) {
+                    const spot = potentialEnemySpots[i];
+                    grid[spot.y][spot.x] = SURFACE.ENEMY;
+                }
+            }
+
+            ensurePath(grid, path);
+            return grid;
+        }
+
+        function generatePath(rng, width, height, startX, startY, goalX, goalY, turns) {
+            const path = [{ x: startX, y: startY }];
+            let currentX = startX;
+            let currentY = startY;
+            const points = [{ x: startX, y: startY }];
+
+            for (let i = 0; i < turns; i++) {
+                const horizontal = rng.randomBool();
+                if (horizontal) {
+                    const targetX = i === turns - 1 ? goalX : rng.randomInt(1, width - 2);
+                    points.push({ x: targetX, y: currentY });
+                    currentX = targetX;
+                } else {
+                    const targetY = i === turns - 1 ? goalY : rng.randomInt(1, height - 2);
+                    points.push({ x: currentX, y: targetY });
+                    currentY = targetY;
+                }
+            }
+
+            if (points[points.length - 1].x !== goalX || points[points.length - 1].y !== goalY) {
+                points.push({ x: goalX, y: goalY });
+            }
+
+            for (let i = 1; i < points.length; i++) {
+                const from = points[i - 1];
+                const to = points[i];
+                const line = getLine(from.x, from.y, to.x, to.y);
+                for (let j = 1; j < line.length; j++) {
+                    path.push(line[j]);
+                }
+            }
+            return path;
+        }
+
+        function getLine(x1, y1, x2, y2) {
+            const points = [];
+            const dx = Math.abs(x2 - x1);
+            const dy = Math.abs(y2 - y1);
+            const sx = (x1 < x2) ? 1 : -1;
+            const sy = (y1 < y2) ? 1 : -1;
+            let err = dx - dy;
+            let x = x1;
+            let y = y1;
+
+            while (true) {
+                points.push({ x, y });
+                if (x === x2 && y === y2) break;
+                const e2 = 2 * err;
+                if (e2 > -dy) { err -= dy; x += sx; }
+                if (e2 < dx) { err += dx; y += sy; }
+            }
+            return points;
+        }
+
+        function ensurePath(grid, path) {
+            for (const point of path) {
+                if (grid[point.y][point.x] === SURFACE.NONE) {
+                    grid[point.y][point.x] = SURFACE.NORMAL;
+                }
+            }
+        }
+
+        function createLevel() {
+            levelGroup = new THREE.Group();
+            scene.add(levelGroup);
+            const levelDefinition = generateProceduralLevel(currentLevel);
+            const materials = {
+                [SURFACE.NORMAL]: new THREE.MeshPhongMaterial({ color: 0x4682B4 }),
+                [SURFACE.START]: new THREE.MeshPhongMaterial({ color: 0x32CD32 }),
+                [SURFACE.GOAL]: new THREE.MeshPhongMaterial({ color: 0x32CD32 }),
+                [SURFACE.ICE]: new THREE.MeshPhongMaterial({ color: 0xADD8E6 }),
+                [SURFACE.STICKY]: new THREE.MeshPhongMaterial({ color: 0x8B4513 }),
+                [SURFACE.ACID]: new THREE.MeshPhongMaterial({ color: 0xFF0000, transparent: true, opacity: 0.8 }),
+                [SURFACE.ELEVATED]: new THREE.MeshPhongMaterial({ color: 0x9370DB })
+            };
+
+            const levelWidth = levelDefinition[0].length;
+            const levelHeight = levelDefinition.length;
+            const offsetX = -levelWidth / 2 + 0.5;
+            const offsetZ = -levelHeight / 2 + 0.5;
+            enemies = [];
+
+            for (let z = 0; z < levelHeight; z++) {
+                for (let x = 0; x < levelWidth; x++) {
+                    const tileType = levelDefinition[z][x];
+                    if (tileType > 0) {
+                        let tileHeight = 0.5;
+                        let tileY = -tileHeight / 2;
+                        if (tileType === SURFACE.ELEVATED) {
+                            tileHeight = 0.8;
+                            tileY = -tileHeight / 2 + 0.15;
+                        }
+                        let material = materials[tileType] || materials[SURFACE.NORMAL];
+                        const geometry = new THREE.BoxGeometry(1, tileHeight, 1);
+                        const tile = new THREE.Mesh(geometry, material);
+                        tile.position.set(x + offsetX, tileY, z + offsetZ);
+                        tile.userData = { type: tileType };
+                        levelGroup.add(tile);
+
+                        if (tileType === SURFACE.START) {
+                            marble.position.set(x + offsetX, SETTINGS.marbleRadius, z + offsetZ);
+                        }
+                        if (tileType === SURFACE.ENEMY && currentLevel >= SETTINGS.enemyStartLevel) {
+                            createEnemy(x + offsetX, z + offsetZ);
+                        }
+                        if (tileType === SURFACE.ACID) {
+                            tile.userData.animOffset = Math.random() * Math.PI * 2;
+                        }
+                    }
+                }
+            }
+        }
+
+        function createEnemy(x, z) {
+            const enemyGeometry = new THREE.SphereGeometry(0.4, 16, 16);
+            const enemyMaterial = new THREE.MeshPhongMaterial({ color: 0xFF0000 });
+            const enemy = new THREE.Mesh(enemyGeometry, enemyMaterial);
+            enemy.position.set(x, 0.4, z);
+            enemy.userData = {
+                direction: new THREE.Vector2(Math.random() - 0.5, Math.random() - 0.5).normalize(),
+                timeSinceDirectionChange: 0
+            };
+            levelGroup.add(enemy);
+            enemies.push(enemy);
+        }
+
+        function createMarble() {
+            const geometry = new THREE.SphereGeometry(SETTINGS.marbleRadius, 32, 32);
+            const material = new THREE.MeshPhongMaterial({
+                color: 0xFFFFFF,
+                specular: 0x111111,
+                shininess: 100
+            });
+            marble = new THREE.Mesh(geometry, material);
+            scene.add(marble);
+            marbleVelocity = { x: 0, y: 0, z: 0 };
+            isJumping = false;
+            isFalling = false;
+        }
+
+        function setupEventListeners() {
+            window.addEventListener('mousedown', onPointerDown);
+            window.addEventListener('mousemove', onPointerMove);
+            window.addEventListener('mouseup', onPointerUp);
+            window.addEventListener('touchstart', onTouchStart);
+            window.addEventListener('touchmove', onTouchMove);
+            window.addEventListener('touchend', onPointerUp);
+            window.addEventListener('resize', onWindowResize);
+            startButton.addEventListener('click', startGame);
+            restartButton.addEventListener('click', restartCurrentLevel);
+        }
+
+        function onTouchStart(event) {
+            event.preventDefault();
+            if (gameState === GAME_STATE.PLAYING && event.touches.length > 0) {
+                isPointerDown = true;
+                lastPointerPosition.x = event.touches[0].clientX;
+                lastPointerPosition.y = event.touches[0].clientY;
+            }
+        }
+
+        function onTouchMove(event) {
+            event.preventDefault();
+            if (gameState === GAME_STATE.PLAYING && isPointerDown && event.touches.length > 0) {
+                const deltaX = event.touches[0].clientX - lastPointerPosition.x;
+                const deltaY = event.touches[0].clientY - lastPointerPosition.y;
+                const totalDistance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+                if (totalDistance > 5) {
+                    const swipeForce = totalDistance * 0.001;
+                    const cameraRight = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+                    const cameraDown = new THREE.Vector3(0, 0, 1).applyQuaternion(camera.quaternion);
+                    const normalizedDeltaX = deltaX / totalDistance;
+                    const normalizedDeltaY = deltaY / totalDistance;
+                    const impulseX = (normalizedDeltaX * cameraRight.x + normalizedDeltaY * cameraDown.x) * swipeForce;
+                    const impulseZ = (normalizedDeltaX * cameraRight.z + normalizedDeltaY * cameraDown.z) * swipeForce;
+                    marbleVelocity.x += impulseX;
+                    marbleVelocity.z += impulseZ;
+                    const maxVelocity = 0.12;
+                    marbleVelocity.x = Math.max(-maxVelocity, Math.min(maxVelocity, marbleVelocity.x));
+                    marbleVelocity.z = Math.max(-maxVelocity, Math.min(maxVelocity, marbleVelocity.z));
+                }
+                lastPointerPosition.x = event.touches[0].clientX;
+                lastPointerPosition.y = event.touches[0].clientY;
+            }
+        }
+
+        function onPointerDown(event) {
+            if (gameState === GAME_STATE.PLAYING) {
+                isPointerDown = true;
+                lastPointerPosition.x = event.clientX;
+                lastPointerPosition.y = event.clientY;
+            }
+        }
+
+        function onPointerMove(event) {
+            if (gameState === GAME_STATE.PLAYING && isPointerDown) {
+                const deltaX = event.clientX - lastPointerPosition.x;
+                const deltaY = event.clientY - lastPointerPosition.y;
+                const totalDistance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+                const rect = renderer.domElement.getBoundingClientRect();
+                const mouseX = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+                const mouseY = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+                const raycaster = new THREE.Raycaster();
+                raycaster.setFromCamera(new THREE.Vector2(mouseX, mouseY), camera);
+                const intersects = raycaster.intersectObject(marble);
+                const isPassingThroughMarble = intersects.length > 0;
+                if (totalDistance > 5 && isPassingThroughMarble) {
+                    const swipeForce = totalDistance * 0.0015;
+                    const cameraRight = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+                    const cameraDown = new THREE.Vector3(0, 0, 1).applyQuaternion(camera.quaternion);
+                    const normalizedDeltaX = deltaX / totalDistance;
+                    const normalizedDeltaY = deltaY / totalDistance;
+                    const impulseX = (normalizedDeltaX * cameraRight.x + normalizedDeltaY * cameraDown.x) * swipeForce;
+                    const impulseZ = (normalizedDeltaX * cameraRight.z + normalizedDeltaY * cameraDown.z) * swipeForce;
+                    const currentDirection = new THREE.Vector2(marbleVelocity.x, marbleVelocity.z).normalize();
+                    const swipeDirection = new THREE.Vector2(impulseX, impulseZ).normalize();
+                    const dotProduct = currentDirection.dot(swipeDirection);
+                    if (dotProduct < 0) {
+                        marbleVelocity.x += impulseX * 0.5;
+                        marbleVelocity.z += impulseZ * 0.5;
+                    } else {
+                        marbleVelocity.x += impulseX;
+                        marbleVelocity.z += impulseZ;
+                    }
+                    const maxVelocity = 0.12;
+                    marbleVelocity.x = Math.max(-maxVelocity, Math.min(maxVelocity, marbleVelocity.x));
+                    marbleVelocity.z = Math.max(-maxVelocity, Math.min(maxVelocity, marbleVelocity.z));
+                    isPointerDown = false;
+                }
+                lastPointerPosition.x = event.clientX;
+                lastPointerPosition.y = event.clientY;
+            }
+        }
+
+        function onPointerUp() {
+            isPointerDown = false;
+        }
+
+        function onWindowResize() {
+            const aspect = window.innerWidth / window.innerHeight;
+            const viewSize = window.innerHeight > window.innerWidth ? 10 : 5;
+            camera.left = -viewSize * aspect;
+            camera.right = viewSize * aspect;
+            camera.top = viewSize;
+            camera.bottom = -viewSize;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function startGame() {
+            gameState = GAME_STATE.PLAYING;
+            currentLevel = 1;
+            startScreen.style.display = 'none';
+            endScreen.style.display = 'none';
+            startTime = Date.now();
+            timeLeft = SETTINGS.timeLimit;
+            updateTimer();
+            if (levelGroup) scene.remove(levelGroup);
+            if (marble) scene.remove(marble);
+            createMarble();
+            createLevel();
+            showStatus('Level ' + currentLevel + ' - Go!');
+        }
+
+        function restartCurrentLevel() {
+            gameState = GAME_STATE.PLAYING;
+            endScreen.style.display = 'none';
+            const currentTime = Date.now();
+            startTime = currentTime - (SETTINGS.timeLimit - timeLeft) * 1000;
+            scene.remove(levelGroup);
+            marbleVelocity = { x: 0, y: 0, z: 0 };
+            createLevel();
+            showStatus('Try again!');
+        }
+
+        function nextLevel() {
+            currentLevel++;
+            if (currentLevel > SETTINGS.maxLevels) {
+                endGame(true);
+                return;
+            }
+            scene.remove(levelGroup);
+            marbleVelocity = { x: 0, y: 0, z: 0 };
+            isJumping = false;
+            isFalling = false;
+            createLevel();
+            timeLeft += 30;
+            startTime = Date.now() - (SETTINGS.timeLimit - timeLeft) * 1000;
+            showStatus('Level ' + currentLevel + ' - Go!');
+        }
+
+        function endGame(isVictory) {
+            gameState = isVictory ? GAME_STATE.WIN : GAME_STATE.GAME_OVER;
+            endScreen.style.display = 'flex';
+            endMessage.textContent = isVictory ? 'Victory!' : 'Try Again!';
+        }
+
+        function updateTimer() {
+            if (gameState === GAME_STATE.PLAYING) {
+                const currentTime = Date.now();
+                const elapsedSeconds = Math.floor((currentTime - startTime) / 1000);
+                timeLeft = Math.max(0, SETTINGS.timeLimit + 30 * (currentLevel - 1) - elapsedSeconds);
+                timeValue.textContent = timeLeft;
+                if (timeLeft <= 0) endGame(false);
+            }
+        }
+
+        function showStatus(message) {
+            statusEl.textContent = message;
+            statusEl.style.opacity = 1;
+            setTimeout(() => { statusEl.style.opacity = 0; }, 2000);
+        }
+
+        function getMarbleSurface() {
+            const raycaster = new THREE.Raycaster(marble.position.clone(), new THREE.Vector3(0, -1, 0));
+            const intersects = raycaster.intersectObjects(levelGroup.children);
+            if (intersects.length > 0 && intersects[0].distance < SETTINGS.marbleRadius + 0.1) {
+                return intersects[0].object.userData.type || SURFACE.NORMAL;
+            }
+            return SURFACE.NONE;
+        }
+
+        function isMarbleAtGoal() {
+            return getMarbleSurface() === SURFACE.GOAL;
+        }
+
+        function isMarbleTouchingEnemy() {
+            for (const enemy of enemies) {
+                const distance = marble.position.distanceTo(enemy.position);
+                if (distance < SETTINGS.marbleRadius + 0.4) return true;
+            }
+            return false;
+        }
+
+        function updateEnemies() {
+            for (const enemy of enemies) {
+                enemy.position.x += enemy.userData.direction.x * enemySpeed;
+                enemy.position.z += enemy.userData.direction.y * enemySpeed;
+                enemy.userData.timeSinceDirectionChange += 1 / 60;
+                const raycaster = new THREE.Raycaster(
+                    enemy.position.clone(),
+                    new THREE.Vector3(enemy.userData.direction.x, 0, enemy.userData.direction.y).normalize()
+                );
+                const intersects = raycaster.intersectObjects(levelGroup.children);
+                if (intersects.length > 0 && intersects[0].distance < 0.5 || enemy.userData.timeSinceDirectionChange > 3) {
+                    enemy.userData.direction = new THREE.Vector2(Math.random() - 0.5, Math.random() - 0.5).normalize();
+                    enemy.userData.timeSinceDirectionChange = 0;
+                }
+            }
+        }
+
+        function updateMarblePhysics() {
+            if (gameState === GAME_STATE.PLAYING) {
+                const surfaceType = getMarbleSurface();
+                let frictionFactor = 0.98;
+                let speedMultiplier = 1.0;
+                if (surfaceType === SURFACE.ICE) {
+                    frictionFactor = 0.995;
+                    speedMultiplier = SETTINGS.iceMultiplier;
+                } else if (surfaceType === SURFACE.STICKY) {
+                    frictionFactor = 0.94;
+                    speedMultiplier = SETTINGS.stickyMultiplier;
+                } else if (surfaceType === SURFACE.ACID) {
+                    showStatus('Melted in lava!');
+                    endScreen.style.display = 'flex';
+                    endMessage.textContent = 'Try Again!';
+                    gameState = GAME_STATE.GAME_OVER;
+                    return;
+                }
+                if (surfaceType === SURFACE.ELEVATED && !isJumping && !isFalling) {
+                    const targetHeight = SETTINGS.marbleRadius + 0.15;
+                    marble.position.y = targetHeight;
+                }
+                if (surfaceType !== SURFACE.NONE && !isJumping && !isFalling) {
+                    marble.position.x += marbleVelocity.x * speedMultiplier * 0.95;
+                    marble.position.z += marbleVelocity.z * speedMultiplier * 0.95;
+                    marbleVelocity.x *= frictionFactor;
+                    marbleVelocity.z *= frictionFactor;
+                    if (Math.abs(marbleVelocity.x) < 0.001) marbleVelocity.x = 0;
+                    if (Math.abs(marbleVelocity.z) < 0.001) marbleVelocity.z = 0;
+                }
+                if (surfaceType === SURFACE.NONE || isJumping) {
+                    marbleVelocity.y -= SETTINGS.gravity;
+                    isFalling = true;
+                } else {
+                    marbleVelocity.y = 0;
+                    isFalling = false;
+                }
+                marble.position.y += marbleVelocity.y;
+                if (marble.position.y < -5) {
+                    showStatus('Fell off the level!');
+                    endScreen.style.display = 'flex';
+                    endMessage.textContent = 'Try Again!';
+                    gameState = GAME_STATE.GAME_OVER;
+                    return;
+                }
+                if (isMarbleAtGoal()) {
+                    showStatus('Level ' + currentLevel + ' completed!');
+                    nextLevel();
+                }
+                if (isMarbleTouchingEnemy()) {
+                    showStatus('Hit by an enemy!');
+                    endScreen.style.display = 'flex';
+                    endMessage.textContent = 'Try Again!';
+                    gameState = GAME_STATE.GAME_OVER;
+                }
+            }
+        }
+
+        function updateAcidAnimation() {
+            if (gameState === GAME_STATE.PLAYING) {
+                levelGroup.children.forEach(child => {
+                    if (child.userData && child.userData.type === SURFACE.ACID) {
+                        const time = Date.now() * 0.001;
+                        const offset = child.userData.animOffset || 0;
+                        child.position.y = -0.25 + Math.sin(time + offset) * 0.05;
+                    }
+                });
+            }
+        }
+
+        function updateCamera() {
+            if (marble && gameState === GAME_STATE.PLAYING) {
+                cameraTargetPosition.copy(marble.position);
+                cameraTargetPosition.y = 0;
+                camera.position.x += (cameraTargetPosition.x - camera.position.x + SETTINGS.cameraDistance) * cameraSmoothing;
+                camera.position.z += (cameraTargetPosition.z - camera.position.z + SETTINGS.cameraDistance) * cameraSmoothing;
+                camera.position.y = SETTINGS.cameraDistance;
+                camera.lookAt(marble.position);
+            }
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            if (gameState === GAME_STATE.PLAYING) {
+                updateMarblePhysics();
+                updateEnemies();
+                updateAcidAnimation();
+                updateTimer();
+                updateCamera();
+            }
+            if (marble) {
+                marble.rotation.x += marbleVelocity.z * 2;
+                marble.rotation.z -= marbleVelocity.x * 2;
+            }
+            renderer.render(scene, camera);
+        }
+
+        window.addEventListener('load', init);
+    </script>
+</body>
+</html>
