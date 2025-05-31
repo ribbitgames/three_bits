@@ -1,0 +1,795 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>3D Breakout</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body, html {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+            background-color: #000;
+            margin: 0;
+            touch-action: none;
+        }
+
+        #game-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            touch-action: none;
+        }
+
+        #score, #lives, #level {
+            position: absolute;
+            color: white;
+            padding: 10px;
+            font-size: 18px;
+            z-index: 10;
+            text-shadow: 2px 2px 2px rgba(0, 0, 0, 0.5);
+        }
+
+        #score {
+            top: 10px;
+            left: 10px;
+        }
+
+        #lives {
+            top: 10px;
+            right: 10px;
+        }
+
+        #level {
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+
+        #start-screen, #game-over-screen, #level-complete-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background-color: rgba(0, 0, 0, 0.8);
+            z-index: 20;
+            color: white;
+        }
+
+        h1 {
+            font-size: 48px;
+            margin-bottom: 30px;
+            text-shadow: 0 0 10px #fff, 0 0 20px #fff, 0 0 30px #e60073, 0 0 40px #e60073;
+        }
+
+        button {
+            padding: 15px 30px;
+            font-size: 20px;
+            background: linear-gradient(45deg, #ff00cc, #3333ff);
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            touch-action: manipulation;
+        }
+
+        button:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 15px rgba(255, 255, 255, 0.5);
+        }
+
+        #final-score, #level-score, #level-number {
+            font-size: 24px;
+            margin-bottom: 20px;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        @media (orientation: portrait) {
+            h1 {
+                font-size: 36px;
+            }
+            
+            button {
+                padding: 12px 24px;
+                font-size: 18px;
+            }
+
+            #score, #lives, #level {
+                font-size: 16px;
+                padding: 8px;
+            }
+        }
+
+        @media (max-width: 600px) {
+            h1 {
+                font-size: 32px;
+            }
+
+            button {
+                padding: 10px 20px;
+                font-size: 16px;
+            }
+
+            #score, #lives, #level {
+                font-size: 14px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <div id="score">Score: 0</div>
+        <div id="lives">Lives: 3</div>
+        <div id="level">Level: 1</div>
+
+        <div id="start-screen">
+            <h1>3D BREAKOUT</h1>
+            <button id="start-button">START GAME</button>
+        </div>
+
+        <div id="game-over-screen" class="hidden">
+            <h1>GAME OVER</h1>
+            <div id="final-score">Score: 0</div>
+            <button id="restart-button">PLAY AGAIN</button>
+        </div>
+
+        <div id="level-complete-screen" class="hidden">
+            <h1>LEVEL COMPLETE!</h1>
+            <div id="level-score">Score: 0</div>
+            <div id="level-number">Level: 1</div>
+            <button id="next-level-button">NEXT LEVEL</button>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
+    <script>
+        // Game Configuration
+        const GAME_CONFIG = {
+            INITIAL_BALL_SPEED: 0.1,
+            BALL_SPEED_INCREMENT: 0.001,
+            BALL_SPEED_BRICK_BOOST: 0.02,
+            MAX_BALL_SPEED: 1,
+            BALL_RADIUS: 0.25,
+            INITIAL_PADDLE_WIDTH: 2.0,
+            MIN_PADDLE_WIDTH: 1.2,
+            PADDLE_WIDTH_DECREASE: 0.15,
+            PADDLE_HEIGHT: 0.3,
+            PADDLE_SPEED: 0.4,
+            INITIAL_BRICK_ROWS: 4,
+            MAX_BRICK_ROWS: 6,
+            BRICK_COLUMNS: 8,
+            BRICK_PADDING: 0.1,
+            BRICK_HEIGHT: 0.4,
+            BRICK_DEPTH: 0.3,
+            SPECIAL_BRICK_CHANCE: 0.2,
+            MULTI_HIT_BRICK_COLOR: 0xFFD700,
+            EXTRA_BALL_BRICK_COLOR: 0x00FFFF,
+            STARTING_LIVES: 3,
+            POINTS_PER_ROW: 10,
+            BRICK_MOVEMENT_START_LEVEL: 4,
+            BRICK_MOVEMENT_SPEED_FACTOR: 0.004,
+            BALL_COLOR: 0xffffff,
+            PADDLE_COLOR: 0x4169e1,
+            WALL_COLOR: 0x606060,
+            BRICK_COLORS: [0xff0000, 0xff7f00, 0xffff00, 0x00ff00, 0x0000ff, 0x4b0082]
+        };
+
+        class BreakoutGame {
+            constructor() {
+                this.score = 0;
+                this.lives = GAME_CONFIG.STARTING_LIVES;
+                this.level = 1;
+                this.gameStarted = false;
+                this.gameOver = false;
+                this.paused = false;
+                this.balls = [];
+                this.initDOMElements();
+                this.paddleSpeed = GAME_CONFIG.PADDLE_SPEED;
+                this.ballSpeed = GAME_CONFIG.INITIAL_BALL_SPEED;
+                this.ballSpeedIncrement = GAME_CONFIG.BALL_SPEED_INCREMENT;
+                this.blockSpeedBoost = GAME_CONFIG.BALL_SPEED_BRICK_BOOST;
+                this.maxBallSpeed = GAME_CONFIG.MAX_BALL_SPEED;
+                this.brickRows = GAME_CONFIG.INITIAL_BRICK_ROWS;
+                this.brickColumns = GAME_CONFIG.BRICK_COLUMNS;
+                this.brickPadding = GAME_CONFIG.BRICK_PADDING;
+                this.brickColorsByRow = GAME_CONFIG.BRICK_COLORS;
+                this.setupThree();
+                this.setupLights();
+                this.setupEventListeners();
+                this.createObjects();
+                this.animate = this.animate.bind(this);
+            }
+
+            initDOMElements() {
+                this.scoreElement = document.getElementById('score');
+                this.livesElement = document.getElementById('lives');
+                this.levelElement = document.getElementById('level');
+                this.startScreen = document.getElementById('start-screen');
+                this.gameOverScreen = document.getElementById('game-over-screen');
+                this.levelCompleteScreen = document.getElementById('level-complete-screen');
+                this.finalScoreElement = document.getElementById('final-score');
+                this.levelScoreElement = document.getElementById('level-score');
+                this.levelNumberElement = document.getElementById('level-number');
+                this.startButton = document.getElementById('start-button');
+                this.restartButton = document.getElementById('restart-button');
+                this.nextLevelButton = document.getElementById('next-level-button');
+            }
+
+            setupThree() {
+                this.scene = new THREE.Scene();
+                this.scene.background = new THREE.Color(0x000000);
+                this.setupCamera();
+                this.renderer = new THREE.WebGLRenderer({ antialias: true });
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+                this.renderer.setPixelRatio(window.devicePixelRatio);
+                document.getElementById('game-container').appendChild(this.renderer.domElement);
+                window.addEventListener('resize', this.handleResize.bind(this));
+            }
+
+            setupCamera() {
+                const aspect = window.innerWidth / window.innerHeight;
+                this.isPortrait = aspect < 1;
+                if (this.isPortrait) {
+                    this.sceneWidth = 10;
+                    this.sceneHeight = this.sceneWidth / aspect;
+                } else {
+                    this.sceneHeight = 10;
+                    this.sceneWidth = this.sceneHeight * aspect;
+                }
+                this.camera = new THREE.OrthographicCamera(
+                    -this.sceneWidth / 2, this.sceneWidth / 2,
+                    this.sceneHeight / 2, -this.sceneHeight / 2,
+                    0.1, 1000
+                );
+                this.camera.position.z = 10;
+            }
+
+            handleResize() {
+                const newAspect = window.innerWidth / window.innerHeight;
+                this.isPortrait = newAspect < 1;
+                if (this.isPortrait) {
+                    this.sceneWidth = 10;
+                    this.sceneHeight = this.sceneWidth / newAspect;
+                } else {
+                    this.sceneHeight = 10;
+                    this.sceneWidth = this.sceneHeight * newAspect;
+                }
+                this.camera.left = -this.sceneWidth / 2;
+                this.camera.right = this.sceneWidth / 2;
+                this.camera.top = this.sceneHeight / 2;
+                this.camera.bottom = -this.sceneHeight / 2;
+                this.camera.updateProjectionMatrix();
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+                this.updateWalls();
+                if (this.paddle) {
+                    this.paddle.position.x = 0;
+                }
+            }
+
+            setupLights() {
+                const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+                this.scene.add(ambientLight);
+                const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+                directionalLight.position.set(5, 5, 10);
+                this.scene.add(directionalLight);
+                const pointLight1 = new THREE.PointLight(0x00ffff, 0.5);
+                pointLight1.position.set(-this.sceneWidth / 2, this.sceneHeight / 2, 5);
+                this.scene.add(pointLight1);
+                const pointLight2 = new THREE.PointLight(0xff00ff, 0.5);
+                pointLight2.position.set(this.sceneWidth / 2, this.sceneHeight / 2, 5);
+                this.scene.add(pointLight2);
+            }
+
+            setupEventListeners() {
+                this.mousePosition = new THREE.Vector2();
+                document.addEventListener('mousemove', (event) => {
+                    if (!this.gameStarted || this.gameOver || this.paused) return;
+                    this.updateMousePosition(event.clientX);
+                });
+                document.addEventListener('touchmove', (event) => {
+                    if (!this.gameStarted || this.gameOver || this.paused) return;
+                    event.preventDefault();
+                    this.updateMousePosition(event.touches[0].clientX);
+                }, { passive: false });
+                this.startButton.addEventListener('click', () => this.startGame());
+                this.restartButton.addEventListener('click', () => this.restartGame());
+                this.nextLevelButton.addEventListener('click', () => this.startNextLevel());
+                document.addEventListener('visibilitychange', () => {
+                    this.paused = document.hidden;
+                });
+            }
+
+            updateMousePosition(clientX) {
+                const normalizedX = (clientX / window.innerWidth) * 2 - 1;
+                const paddleX = normalizedX * (this.sceneWidth / 2 - this.paddleWidth / 2);
+                if (this.paddle) {
+                    this.paddleTargetX = THREE.MathUtils.clamp(
+                        paddleX,
+                        -this.sceneWidth / 2 + this.paddleWidth / 2 + this.wallThickness,
+                        this.sceneWidth / 2 - this.paddleWidth / 2 - this.wallThickness
+                    );
+                }
+            }
+
+            createObjects() {
+                this.createPaddle();
+                this.createBall();
+                this.createWalls();
+                this.createBricks();
+            }
+
+            createPaddle() {
+                this.paddleWidth = GAME_CONFIG.INITIAL_PADDLE_WIDTH;
+                this.paddleHeight = GAME_CONFIG.PADDLE_HEIGHT;
+                const paddleGeometry = new THREE.BoxGeometry(this.paddleWidth, this.paddleHeight, 0.5);
+                const paddleMaterial = new THREE.MeshPhongMaterial({
+                    color: GAME_CONFIG.PADDLE_COLOR,
+                    specular: 0x111111,
+                    shininess: 50
+                });
+                this.paddle = new THREE.Mesh(paddleGeometry, paddleMaterial);
+                this.paddle.position.y = -this.sceneHeight / 2 + 1;
+                this.paddle.position.z = 0;
+                this.paddleTargetX = 0;
+                this.scene.add(this.paddle);
+            }
+
+            createBall() {
+                this.ballRadius = GAME_CONFIG.BALL_RADIUS;
+                const ballGeometry = new THREE.SphereGeometry(this.ballRadius, 32, 32);
+                const ballMaterial = new THREE.MeshPhongMaterial({
+                    color: GAME_CONFIG.BALL_COLOR,
+                    specular: 0xffffff,
+                    shininess: 100
+                });
+                this.ball = new THREE.Mesh(ballGeometry, ballMaterial);
+                this.resetBall();
+                this.scene.add(this.ball);
+            }
+
+            createExtraBall() {
+                const ballGeometry = new THREE.SphereGeometry(this.ballRadius, 32, 32);
+                const ballMaterial = new THREE.MeshPhongMaterial({
+                    color: GAME_CONFIG.BALL_COLOR,
+                    specular: 0xffffff,
+                    shininess: 100
+                });
+                const newBall = new THREE.Mesh(ballGeometry, ballMaterial);
+                newBall.position.copy(this.ball.position);
+                newBall.position.x += this.ballRadius * 0.5;
+                const clampedSpeed = Math.min(this.ballSpeed, GAME_CONFIG.MAX_BALL_SPEED);
+                const angle = Math.random() * Math.PI * 2;
+                const newBallVelocity = new THREE.Vector2(
+                    Math.cos(angle) * clampedSpeed,
+                    Math.sin(angle) * clampedSpeed
+                );
+                this.scene.add(newBall);
+                this.balls.push({ mesh: newBall, velocity: newBallVelocity });
+            }
+
+            createWalls() {
+                this.wallThickness = 0.3;
+                const wallMaterial = new THREE.MeshPhongMaterial({
+                    color: GAME_CONFIG.WALL_COLOR,
+                    specular: 0x111111,
+                    shininess: 10
+                });
+                const leftWallGeometry = new THREE.BoxGeometry(this.wallThickness, this.sceneHeight, 1);
+                this.leftWall = new THREE.Mesh(leftWallGeometry, wallMaterial);
+                this.leftWall.position.x = -this.sceneWidth / 2 - this.wallThickness / 2;
+                this.scene.add(this.leftWall);
+                const rightWallGeometry = new THREE.BoxGeometry(this.wallThickness, this.sceneHeight, 1);
+                this.rightWall = new THREE.Mesh(rightWallGeometry, wallMaterial);
+                this.rightWall.position.x = this.sceneWidth / 2 + this.wallThickness / 2;
+                this.scene.add(this.rightWall);
+                const topWallGeometry = new THREE.BoxGeometry(this.sceneWidth + this.wallThickness * 2, this.wallThickness, 1);
+                this.topWall = new THREE.Mesh(topWallGeometry, wallMaterial);
+                this.topWall.position.y = this.sceneHeight / 2 + this.wallThickness / 2;
+                this.scene.add(this.topWall);
+            }
+
+            updateWalls() {
+                if (this.leftWall) {
+                    this.leftWall.position.x = -this.sceneWidth / 2 - this.wallThickness / 2;
+                    this.leftWall.geometry = new THREE.BoxGeometry(this.wallThickness, this.sceneHeight, 1);
+                }
+                if (this.rightWall) {
+                    this.rightWall.position.x = this.sceneWidth / 2 + this.wallThickness / 2;
+                    this.rightWall.geometry = new THREE.BoxGeometry(this.wallThickness, this.sceneHeight, 1);
+                }
+                if (this.topWall) {
+                    this.topWall.geometry = new THREE.BoxGeometry(this.sceneWidth + this.wallThickness * 2, this.wallThickness, 1);
+                    this.topWall.position.y = this.sceneHeight / 2 + this.wallThickness / 2;
+                }
+            }
+
+            createBricks() {
+                this.bricks = [];
+                this.balls = [{ mesh: this.ball, velocity: this.ballVelocity }];
+                this.brickWidth = (this.sceneWidth - (this.brickColumns + 1) * this.brickPadding) / this.brickColumns;
+                this.brickHeight = GAME_CONFIG.BRICK_HEIGHT;
+                this.brickDepth = GAME_CONFIG.BRICK_DEPTH;
+                const startX = -this.sceneWidth / 2 + this.brickPadding + this.brickWidth / 2;
+                const startY = this.sceneHeight / 2 - this.sceneHeight / 5;
+                for (let row = 0; row < this.brickRows; row++) {
+                    for (let col = 0; col < this.brickColumns; col++) {
+                        const brickGeometry = new THREE.BoxGeometry(this.brickWidth, this.brickHeight, this.brickDepth);
+                        const isSpecial = Math.random() < GAME_CONFIG.SPECIAL_BRICK_CHANCE;
+                        const specialType = isSpecial ? (Math.random() < 0.5 ? 'multiHit' : 'extraBall') : null;
+                        let brickColor;
+                        if (specialType === 'multiHit') {
+                            brickColor = GAME_CONFIG.MULTI_HIT_BRICK_COLOR;
+                        } else if (specialType === 'extraBall') {
+                            brickColor = GAME_CONFIG.EXTRA_BALL_BRICK_COLOR;
+                        } else {
+                            const colorIndex = row % this.brickColorsByRow.length;
+                            brickColor = this.brickColorsByRow[colorIndex];
+                        }
+                        const brickMaterial = new THREE.MeshPhongMaterial({
+                            color: brickColor,
+                            specular: 0xffffff,
+                            shininess: 30
+                        });
+                        const brick = new THREE.Mesh(brickGeometry, brickMaterial);
+                        brick.position.x = startX + col * (this.brickWidth + this.brickPadding);
+                        brick.position.y = startY - row * (this.brickHeight + this.brickPadding);
+                        brick.position.z = 0;
+                        this.scene.add(brick);
+                        this.bricks.push({
+                            mesh: brick,
+                            row: row,
+                            col: col,
+                            active: true,
+                            special: specialType,
+                            hitsRemaining: specialType === 'multiHit' ? 2 : 1
+                        });
+                    }
+                }
+            }
+
+            clearBricks() {
+                for (const brick of this.bricks) {
+                    this.scene.remove(brick.mesh);
+                }
+                this.bricks = [];
+            }
+
+            resetBall() {
+                this.ball.position.x = 0;
+                this.ball.position.y = -this.sceneHeight / 2 + 1.5;
+                this.ball.position.z = 0;
+                this.ballSpeed = GAME_CONFIG.INITIAL_BALL_SPEED;
+                const angle = Math.PI / 4 + (Math.random() * 0.1);
+                this.ballVelocity = new THREE.Vector2(
+                    Math.cos(angle) * this.ballSpeed * (Math.random() < 0.5 ? 1 : -1),
+                    Math.sin(angle) * this.ballSpeed
+                );
+            }
+
+            startGame() {
+                this.startScreen.classList.add('hidden');
+                this.gameStarted = true;
+                this.gameOver = false;
+                this.paused = false;
+                this.resetGameState();
+                requestAnimationFrame(this.animate);
+            }
+
+            resetGameState() {
+                this.score = 0;
+                this.lives = GAME_CONFIG.STARTING_LIVES;
+                this.level = 1;
+                this.paddleWidth = GAME_CONFIG.INITIAL_PADDLE_WIDTH;
+                if (this.paddle) {
+                    this.paddle.scale.x = 1;
+                }
+                this.ballSpeed = GAME_CONFIG.INITIAL_BALL_SPEED;
+                this.brickRows = GAME_CONFIG.INITIAL_BRICK_ROWS;
+                this.brickMovementSpeed = 0;
+                this.updateUI();
+                this.resetBall();
+                this.clearBricks();
+                this.createBricks();
+            }
+
+            restartGame() {
+                this.gameOverScreen.classList.add('hidden');
+                this.gameOver = false;
+                this.gameStarted = true;
+                this.paused = false;
+                this.resetGameState();
+                requestAnimationFrame(this.animate);
+            }
+
+            updateUI() {
+                this.scoreElement.textContent = `Score: ${this.score}`;
+                this.livesElement.textContent = `Lives: ${this.lives}`;
+                this.levelElement.textContent = `Level: ${this.level}`;
+                this.finalScoreElement.textContent = `Final Score: ${this.score}`;
+                this.levelScoreElement.textContent = `Score: ${this.score}`;
+                this.levelNumberElement.textContent = `Level ${this.level} Completed!`;
+            }
+
+            checkCollisions() {
+                this.checkPaddleCollision();
+                this.checkWallCollisions();
+                this.checkBottomCollision();
+                this.checkBrickCollisions();
+            }
+
+            checkPaddleCollision() {
+                if (this.ball.position.y - this.ballRadius <= this.paddle.position.y + this.paddleHeight / 2 &&
+                    this.ball.position.y + this.ballRadius >= this.paddle.position.y - this.paddleHeight / 2 &&
+                    this.ball.position.x + this.ballRadius >= this.paddle.position.x - this.paddleWidth / 2 &&
+                    this.ball.position.x - this.ballRadius <= this.paddle.position.x + this.paddleWidth / 2 &&
+                    this.ballVelocity.y < 0) {
+                    const hitPosition = (this.ball.position.x - this.paddle.position.x) / (this.paddleWidth / 2);
+                    const maxBounceAngle = Math.PI / 3;
+                    const bounceAngle = hitPosition * maxBounceAngle;
+                    this.ballSpeed = Math.min(this.ballSpeed + this.ballSpeedIncrement, GAME_CONFIG.MAX_BALL_SPEED);
+                    this.ballVelocity.x = Math.sin(bounceAngle) * this.ballSpeed;
+                    this.ballVelocity.y = Math.cos(bounceAngle) * this.ballSpeed;
+                }
+            }
+
+            checkWallCollisions(ballMesh, ballVelocity) {
+                if (ballMesh.position.x - this.ballRadius <= -this.sceneWidth / 2 + this.wallThickness) {
+                    ballMesh.position.x = -this.sceneWidth / 2 + this.ballRadius + this.wallThickness;
+                    ballVelocity.x = Math.abs(ballVelocity.x);
+                } else if (ballMesh.position.x + this.ballRadius >= this.sceneWidth / 2 - this.wallThickness) {
+                    ballMesh.position.x = this.sceneWidth / 2 - this.ballRadius - this.wallThickness;
+                    ballVelocity.x = -Math.abs(ballVelocity.x);
+                }
+                if (ballMesh.position.y + this.ballRadius >= this.sceneHeight / 2 - this.wallThickness) {
+                    ballMesh.position.y = this.sceneHeight / 2 - this.ballRadius - this.wallThickness;
+                    ballVelocity.y = -Math.abs(ballVelocity.y);
+                }
+            }
+
+            checkBottomCollision() {
+                if (this.ball.position.y - this.ballRadius < -this.sceneHeight / 2) {
+                    this.lives--;
+                    this.updateUI();
+                    if (this.lives <= 0) {
+                        this.gameOver = true;
+                        this.gameOverScreen.classList.remove('hidden');
+                    } else {
+                        this.ballSpeed = GAME_CONFIG.INITIAL_BALL_SPEED;
+                        this.resetBall();
+                    }
+                }
+            }
+
+            checkBrickCollisions() {
+                for (let ballIndex = 0; ballIndex < this.balls.length; ballIndex++) {
+                    const currentBall = ballIndex === 0 ?
+                        { mesh: this.ball, velocity: this.ballVelocity } :
+                        this.balls[ballIndex];
+                    const ballPosition = currentBall.mesh.position.clone();
+                    const ballDirection = currentBall.velocity.clone().normalize();
+                    const raycaster = new THREE.Raycaster(
+                        ballPosition,
+                        ballDirection,
+                        0,
+                        this.ballRadius + currentBall.velocity.length()
+                    );
+                    const brickMeshes = this.bricks
+                        .filter(brick => brick.active)
+                        .map(brick => brick.mesh);
+                    if (brickMeshes.length === 0) continue;
+                    const intersects = raycaster.intersectObjects(brickMeshes);
+                    if (intersects.length > 0) {
+                        const hitBrickMesh = intersects[0].object;
+                        const hitBrick = this.bricks.find(brick => brick.mesh === hitBrickMesh);
+                        if (hitBrick && hitBrick.active) {
+                            hitBrick.hitsRemaining--;
+                            if (hitBrick.hitsRemaining > 0) {
+                                hitBrick.mesh.material.color.offsetHSL(0, 0, -0.2);
+                            } else {
+                                hitBrick.active = false;
+                                hitBrick.mesh.visible = false;
+                                if (hitBrick.special === 'extraBall') {
+                                    this.createExtraBall();
+                                }
+                                this.score += (this.brickRows - hitBrick.row) * GAME_CONFIG.POINTS_PER_ROW;
+                                this.updateUI();
+                            }
+                            const normal = intersects[0].face.normal.clone();
+                            normal.transformDirection(hitBrickMesh.matrixWorld);
+                            const normal2D = new THREE.Vector2(normal.x, normal.y);
+                            const dot = currentBall.velocity.dot(normal2D);
+                            currentBall.velocity.x -= 2 * dot * normal2D.x;
+                            currentBall.velocity.y -= 2 * dot * normal2D.y;
+                            this.ballSpeed = Math.min(this.ballSpeed + this.blockSpeedBoost, GAME_CONFIG.MAX_BALL_SPEED);
+                            const velocityMagnitude = currentBall.velocity.length();
+                            if (velocityMagnitude > 0) {
+                                currentBall.velocity.divideScalar(velocityMagnitude).multiplyScalar(this.ballSpeed);
+                            }
+                            const pushDistance = this.ballRadius * 1.1;
+                            currentBall.mesh.position.add(normal.multiplyScalar(pushDistance));
+                            const remainingBricks = this.bricks.filter(b => b.active).length;
+                            if (remainingBricks === 0) {
+                                this.showLevelComplete();
+                            }
+                        }
+                    } else {
+                        this.sphereBoxCollisionCheck(currentBall, ballIndex);
+                    }
+                }
+            }
+
+            sphereBoxCollisionCheck(currentBall, ballIndex) {
+                const ballSphere = new THREE.Sphere(currentBall.mesh.position.clone(), this.ballRadius);
+                for (const brick of this.bricks) {
+                    if (!brick.active) continue;
+                    const brickMesh = brick.mesh;
+                    const brickBox = new THREE.Box3().setFromObject(brickMesh);
+                    if (brickBox.intersectsSphere(ballSphere)) {
+                        const brickCenter = brickMesh.position.clone();
+                        const ballCenter = currentBall.mesh.position.clone();
+                        const direction = new THREE.Vector3().subVectors(ballCenter, brickCenter);
+                        const halfWidth = this.brickWidth / 2;
+                        const halfHeight = this.brickHeight / 2;
+                        let normal = new THREE.Vector3();
+                        const absX = Math.abs(direction.x);
+                        const absY = Math.abs(direction.y);
+                        const penetrationX = halfWidth + this.ballRadius - absX;
+                        const penetrationY = halfHeight + this.ballRadius - absY;
+                        if (penetrationX < penetrationY) {
+                            normal.set(Math.sign(direction.x), 0, 0);
+                        } else {
+                            normal.set(0, Math.sign(direction.y), 0);
+                        }
+                        const dot = currentBall.velocity.dot(new THREE.Vector2(normal.x, normal.y));
+                        currentBall.velocity.x -= 2 * dot * normal.x;
+                        currentBall.velocity.y -= 2 * dot * normal.y;
+                        const pushDistance = this.ballRadius * 1.1;
+                        currentBall.mesh.position.add(normal.multiplyScalar(pushDistance));
+                        brick.hitsRemaining--;
+                        if (brick.hitsRemaining > 0) {
+                            brick.mesh.material.color.offsetHSL(0, 0, -0.2);
+                        } else {
+                            brick.active = false;
+                            brick.mesh.visible = false;
+                            if (brick.special === 'extraBall') {
+                                this.createExtraBall();
+                            }
+                            this.score += (this.brickRows - brick.row) * GAME_CONFIG.POINTS_PER_ROW;
+                            this.updateUI();
+                        }
+                        this.ballSpeed = Math.min(this.ballSpeed + this.blockSpeedBoost, GAME_CONFIG.MAX_BALL_SPEED);
+                        const velocityMagnitude = currentBall.velocity.length();
+                        if (velocityMagnitude > 0) {
+                            currentBall.velocity.divideScalar(velocityMagnitude).multiplyScalar(this.ballSpeed);
+                        }
+                        const remainingBricks = this.bricks.filter(b => b.active).length;
+                        if (remainingBricks === 0) {
+                            this.showLevelComplete();
+                        }
+                        return;
+                    }
+                }
+            }
+
+            showLevelComplete() {
+                this.paused = true;
+                this.levelCompleteScreen.classList.remove('hidden');
+                this.updateUI();
+            }
+
+            startNextLevel() {
+                this.level++;
+                this.levelCompleteScreen.classList.add('hidden');
+                this.updateUI();
+                this.resetBall();
+                this.clearBricks();
+                this.increaseDifficulty();
+                this.createBricks();
+                this.paused = false;
+            }
+
+            increaseDifficulty() {
+                this.ballSpeed = Math.min(this.ballSpeed + 0.03, GAME_CONFIG.MAX_BALL_SPEED);
+                if (this.level > 1) {
+                    this.paddleWidth = Math.max(
+                        GAME_CONFIG.INITIAL_PADDLE_WIDTH - (this.level - 1) * GAME_CONFIG.PADDLE_WIDTH_DECREASE,
+                        GAME_CONFIG.MIN_PADDLE_WIDTH
+                    );
+                    this.paddle.scale.x = this.paddleWidth / GAME_CONFIG.INITIAL_PADDLE_WIDTH;
+                    if (this.level % 3 === 0) {
+                        this.brickRows = Math.min(this.brickRows + 1, GAME_CONFIG.MAX_BRICK_ROWS);
+                    }
+                    if (this.level > GAME_CONFIG.BRICK_MOVEMENT_START_LEVEL) {
+                        this.brickMovementSpeed = (this.level - GAME_CONFIG.BRICK_MOVEMENT_START_LEVEL) * GAME_CONFIG.BRICK_MOVEMENT_SPEED_FACTOR;
+                    }
+                }
+            }
+
+            updateBall(ballMesh, ballVelocity, timeFactor, steps) {
+                const subStepFactor = timeFactor / steps;
+                for (let i = 0; i < steps; i++) {
+                    ballMesh.position.x += ballVelocity.x * subStepFactor;
+                    ballMesh.position.y += ballVelocity.y * subStepFactor;
+                    this.checkWallCollisions(ballMesh, ballVelocity);
+                    if (ballMesh === this.ball) {
+                        this.checkPaddleCollision();
+                        this.checkBottomCollision();
+                    }
+                }
+            }
+
+            animate(time) {
+                if (this.gameOver) return;
+                if (!this.gameStarted) {
+                    requestAnimationFrame(this.animate);
+                    return;
+                }
+                if (!this.paused) {
+                    const now = Date.now();
+                    const deltaTime = now - (this.lastTime || now);
+                    this.lastTime = now;
+                    const limitedDelta = Math.min(deltaTime, 50);
+                    const timeFactor = limitedDelta / 16.667;
+                    if (this.paddle && this.paddleTargetX !== undefined) {
+                        const currentX = this.paddle.position.x;
+                        const dx = this.paddleTargetX - currentX;
+                        this.paddle.position.x += dx * this.paddleSpeed * timeFactor;
+                    }
+                    const steps = Math.max(5, Math.ceil(this.ballSpeed / 0.02) * 5);
+                    this.updateBall(this.ball, this.ballVelocity, timeFactor, steps);
+                    for (let i = 1; i < this.balls.length; i++) {
+                        const ball = this.balls[i];
+                        this.updateBall(ball.mesh, ball.velocity, timeFactor, steps);
+                        if (ball.mesh.position.y - this.ballRadius < -this.sceneHeight / 2) {
+                            this.scene.remove(ball.mesh);
+                            this.balls.splice(i, 1);
+                            i--;
+                        }
+                    }
+                    this.checkBrickCollisions();
+                    if (this.level > GAME_CONFIG.BRICK_MOVEMENT_START_LEVEL && this.brickMovementSpeed) {
+                        const time = now * 0.001;
+                        for (const brick of this.bricks) {
+                            if (brick.active) {
+                                const originalX = brick.originalX || brick.mesh.position.x;
+                                if (!brick.originalX) {
+                                    brick.originalX = originalX;
+                                }
+                                brick.mesh.position.x = originalX + Math.sin(time + brick.col * 0.3) * this.brickMovementSpeed * 2;
+                            }
+                        }
+                    }
+                }
+                this.renderer.render(this.scene, this.camera);
+                requestAnimationFrame(this.animate);
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            new BreakoutGame();
+        });
+    </script>
+</body>
+</html>
