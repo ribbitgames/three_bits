@@ -32,7 +32,24 @@
             height: 100vh;
         }
 
-        #score-container, #time-container {
+        @keyframes screenShake {
+            0%, 100% { transform: translate(0, 0); }
+            10% { transform: translate(-5px, 5px); }
+            20% { transform: translate(5px, -5px); }
+            30% { transform: translate(-3px, 3px); }
+            40% { transform: translate(3px, -3px); }
+            50% { transform: translate(-2px, 2px); }
+            60% { transform: translate(2px, -2px); }
+            70% { transform: translate(-1px, 1px); }
+            80% { transform: translate(1px, -1px); }
+            90% { transform: translate(0, 0); }
+        }
+
+        .shake {
+            animation: screenShake 0.3s ease-in-out;
+        }
+
+        #score-container, #time-container, #combo-container {
             position: absolute;
             top: 10px;
             padding: 5px 10px;
@@ -49,6 +66,28 @@
 
         #time-container {
             right: 10px;
+        }
+
+        #combo-container {
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 24px;
+            font-weight: bold;
+            background-color: rgba(255, 64, 129, 0.7);
+            display: none;
+        }
+
+        #combo-container.active {
+            display: block;
+        }
+
+        @keyframes comboFlash {
+            0%, 100% { transform: translateX(-50%) scale(1); }
+            50% { transform: translateX(-50%) scale(1.2); }
+        }
+
+        #combo-container.flash {
+            animation: comboFlash 0.3s ease-in-out;
         }
 
         #game-overlay {
@@ -133,6 +172,7 @@
     <div id="game-container">
         <div id="score-container">Score: <span id="score">0</span></div>
         <div id="time-container">Time: <span id="time">60</span>s</div>
+        <div id="combo-container">Combo x<span id="combo">0</span></div>
         <div id="game-overlay" class="visible">
             <div id="game-menu" class="visible">
                 <h1>Balloon Pop!</h1>
@@ -142,6 +182,7 @@
                     <p>Pop as many balloons as you can in 60 seconds!</p>
                     <p>Tap or click balloons to pop them.</p>
                     <p><span style="color: red;">Avoid red balloons!</span> They cost you 10 points.</p>
+                    <p><span style="color: #ff4081;">Build combos for bonus points!</span></p>
                 </div>
             </div>
             <div id="game-over" class="hidden">
@@ -163,12 +204,16 @@
         let timeRemaining = 60;         // Game time in seconds
         let gameActive = false;         // Whether game is currently running
         let highScore = 0;              // Highest score achieved
+        let currentCombo = 0;           // Current combo streak
+        let lastPopTime = 0;            // Time of last balloon pop for combo tracking
+        let difficultyLevel = 1;        // Current difficulty level based on score
 
         // Three.js variables
         let scene, camera, renderer;    // Basic Three.js components
         let balloons = [];              // Array of balloon objects in the scene
         let popSound;                   // Sound effect for balloon popping
         let raycaster, mouse;           // For handling mouse/touch interaction
+        let trailParticles = [];        // Array of trail particles
 
         // Screen boundaries (will be set in init)
         let screenBounds = {
@@ -181,6 +226,9 @@
         // HTML Elements
         const scoreElement = document.getElementById('score');
         const timeElement = document.getElementById('time');
+        const comboElement = document.getElementById('combo');
+        const comboContainer = document.getElementById('combo-container');
+        const gameContainer = document.getElementById('game-container');
         const gameOverlay = document.getElementById('game-overlay');
         const gameMenu = document.getElementById('game-menu');
         const gameOver = document.getElementById('game-over');
@@ -286,10 +334,15 @@
             score = 0;
             timeRemaining = 60;
             gameActive = true;
+            currentCombo = 0;
+            lastPopTime = 0;
+            difficultyLevel = 1;
             
             // Update UI elements
             scoreElement.textContent = score;
             timeElement.textContent = timeRemaining;
+            comboElement.textContent = currentCombo;
+            comboContainer.classList.remove('active');
             gameOverlay.classList.remove('visible');
             gameOverlay.style.backgroundColor = 'rgba(0, 0, 0, 0)';
             gameMenu.classList.add('hidden');
@@ -298,6 +351,10 @@
             // Clear any existing balloons
             balloons.forEach(balloon => scene.remove(balloon.mesh));
             balloons = [];
+            
+            // Clear trail particles
+            trailParticles.forEach(trail => scene.remove(trail.group));
+            trailParticles = [];
             
             // Start the game timer
             const gameTimer = setInterval(() => {
@@ -335,6 +392,48 @@
         }
 
         /**
+         * Update difficulty based on current score
+         */
+        function updateDifficulty() {
+            // Increase difficulty every 50 points
+            const newLevel = Math.floor(score / 50) + 1;
+            if (newLevel !== difficultyLevel) {
+                difficultyLevel = newLevel;
+                
+                // Gradually change background color as difficulty increases
+                const hue = (difficultyLevel - 1) * 30 % 360;
+                scene.background = new THREE.Color(`hsl(${hue}, 40%, 10%)`);
+            }
+        }
+
+        /**
+         * Get spawn probability based on current difficulty
+         */
+        function getSpawnProbability() {
+            // Base spawn rate increases with difficulty
+            const baseRate = 0.03;
+            const difficultyMultiplier = 1 + (difficultyLevel - 1) * 0.3;
+            return Math.min(baseRate * difficultyMultiplier, 0.08);
+        }
+
+        /**
+         * Get balloon speed based on difficulty
+         */
+        function getBalloonSpeed() {
+            // Base speed range
+            const baseMinSpeed = 0.03;
+            const baseMaxSpeed = 0.05;
+            
+            // Speed increases with difficulty
+            const speedMultiplier = 1 + (difficultyLevel - 1) * 0.2;
+            
+            return {
+                min: baseMinSpeed * speedMultiplier,
+                max: baseMaxSpeed * speedMultiplier
+            };
+        }
+
+        /**
          * Create a balloon with random properties
          */
         function createBalloon() {
@@ -352,6 +451,10 @@
             const radius = Math.random() * 0.5 + 0.7;
             const xPosition = Math.random() * (screenBounds.right - screenBounds.left) + screenBounds.left;
             const yPosition = screenBounds.bottom - radius * 2; // Start below the screen
+            
+            // Get speed based on difficulty
+            const speedRange = getBalloonSpeed();
+            const speed = Math.random() * (speedRange.max - speedRange.min) + speedRange.min;
             
             // Create balloon geometry and material
             const geometry = new THREE.SphereGeometry(radius, 32, 32);
@@ -384,16 +487,42 @@
             // Create balloon object with properties needed for game
             const balloon = {
                 mesh: balloonMesh,
-                speed: Math.random() * 0.05 + 0.03,
+                speed: speed,
                 points: isRedBalloon ? -10 : Math.ceil(10 / radius), // Red balloons negative points, smaller balloons worth more
                 popped: false,
                 type: isRedBalloon ? 'red' : 'normal',
-                userData: { horizontalVelocity: 0 }
+                userData: { horizontalVelocity: 0 },
+                color: color
             };
             
             // Add to scene and balloon array
             scene.add(balloonMesh);
             balloons.push(balloon);
+        }
+
+        /**
+         * Create a trail particle for a balloon
+         */
+        function createTrailParticle(balloon) {
+            const particleGeometry = new THREE.SphereGeometry(0.05, 4, 4);
+            const particleMaterial = new THREE.MeshBasicMaterial({
+                color: balloon.color,
+                transparent: true,
+                opacity: 0.6
+            });
+            
+            const particle = new THREE.Mesh(particleGeometry, particleMaterial);
+            particle.position.copy(balloon.mesh.position);
+            particle.position.y -= balloon.mesh.geometry.parameters.radius;
+            
+            const trail = {
+                particle: particle,
+                life: 1.0,
+                group: particle
+            };
+            
+            scene.add(particle);
+            trailParticles.push(trail);
         }
 
         /**
@@ -440,6 +569,48 @@
             }, 1000);
             
             return particles;
+        }
+
+        /**
+         * Trigger screen shake effect
+         */
+        function screenShake() {
+            gameContainer.classList.add('shake');
+            setTimeout(() => {
+                gameContainer.classList.remove('shake');
+            }, 300);
+        }
+
+        /**
+         * Update combo display
+         */
+        function updateCombo(increase) {
+            if (increase) {
+                currentCombo++;
+                lastPopTime = Date.now();
+                
+                // Show combo container
+                if (currentCombo >= 2) {
+                    comboContainer.classList.add('active');
+                    comboElement.textContent = currentCombo;
+                    
+                    // Flash effect for milestones
+                    if (currentCombo % 5 === 0) {
+                        comboContainer.classList.add('flash');
+                        setTimeout(() => {
+                            comboContainer.classList.remove('flash');
+                        }, 300);
+                        
+                        // Screen shake on big combos
+                        if (currentCombo >= 10) {
+                            screenShake();
+                        }
+                    }
+                }
+            } else {
+                currentCombo = 0;
+                comboContainer.classList.remove('active');
+            }
         }
 
         /**
@@ -541,15 +712,26 @@
             // Create pop effect
             createPopEffect(balloon.mesh.position.clone(), balloon.mesh.children[0].material.color.getHex());
             
+            // Calculate score with combo bonus
+            let points = balloon.points;
+            if (balloon.type !== 'red' && currentCombo >= 2) {
+                points = Math.floor(points * (1 + currentCombo * 0.1)); // 10% bonus per combo
+            }
+            
             // Update score
-            score += balloon.points;
+            score += points;
             scoreElement.textContent = score;
             
-            // If it's a bad balloon that was clicked, show a warning
+            // Update difficulty based on new score
+            updateDifficulty();
+            
+            // Update combo
             if (balloon.type === 'red') {
+                updateCombo(false); // Reset combo on red balloon
+                
                 // Create warning text that fades out
                 const warningElement = document.createElement('div');
-                warningElement.textContent = '-10 Points!';
+                warningElement.textContent = '-10 Points! Combo Lost!';
                 warningElement.style.position = 'absolute';
                 warningElement.style.color = 'red';
                 warningElement.style.fontWeight = 'bold';
@@ -569,6 +751,8 @@
                 setTimeout(() => {
                     document.body.removeChild(warningElement);
                 }, 1000);
+            } else {
+                updateCombo(true); // Increase combo on regular balloon
             }
             
             // Remove balloon from scene
@@ -579,9 +763,14 @@
          * Update balloon positions and animations
          */
         function updateBalloons() {
-            // Create new balloons at random intervals
-            if (gameActive && Math.random() < 0.03) {
+            // Create new balloons at random intervals based on difficulty
+            if (gameActive && Math.random() < getSpawnProbability()) {
                 createBalloon();
+            }
+            
+            // Check combo timeout
+            if (currentCombo > 0 && Date.now() - lastPopTime > 2000) {
+                updateCombo(false); // Reset combo if no pops for 2 seconds
             }
             
             // Update existing balloons
@@ -591,6 +780,11 @@
             for (let i = 0; i < balloons.length; i++) {
                 const balloonA = balloons[i];
                 if (balloonA.popped) continue;
+                
+                // Create trail particles occasionally
+                if (Math.random() < 0.05 && trailParticles.length < 30) {
+                    createTrailParticle(balloonA);
+                }
                 
                 for (let j = i + 1; j < balloons.length; j++) {
                     const balloonB = balloons[j];
@@ -672,6 +866,19 @@
             // Remove balloons from the array (in reverse order)
             for (let i = balloonsToRemove.length - 1; i >= 0; i--) {
                 balloons.splice(balloonsToRemove[i], 1);
+            }
+            
+            // Update trail particles
+            for (let i = trailParticles.length - 1; i >= 0; i--) {
+                const trail = trailParticles[i];
+                trail.life -= 0.02;
+                trail.particle.material.opacity = trail.life * 0.6;
+                trail.particle.scale.setScalar(trail.life);
+                
+                if (trail.life <= 0) {
+                    scene.remove(trail.particle);
+                    trailParticles.splice(i, 1);
+                }
             }
         }
 
