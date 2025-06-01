@@ -169,8 +169,8 @@
         const GAME_CONFIG = {
             INITIAL_BALL_SPEED: 0.1,
             BALL_SPEED_INCREMENT: 0.001,
-            BALL_SPEED_BRICK_BOOST: 0.02,
-            MAX_BALL_SPEED: 0.75,
+            BALL_SPEED_BRICK_BOOST: 0.01,
+            MAX_BALL_SPEED: 0.5,
             BALL_RADIUS: 0.25,
             INITIAL_PADDLE_WIDTH: 2.0,
             MIN_PADDLE_WIDTH: 1.2,
@@ -589,9 +589,7 @@
 
             checkBrickCollisions() {
                 for (let ballIndex = 0; ballIndex < this.balls.length; ballIndex++) {
-                    const currentBall = ballIndex === 0 ?
-                        { mesh: this.ball, velocity: this.ballVelocity } :
-                        this.balls[ballIndex];
+                    const currentBall = this.balls[ballIndex];
                     const ballPosition = currentBall.mesh.position.clone();
                     const ballDirection = currentBall.velocity.clone().normalize();
                     const raycaster = new THREE.Raycaster(
@@ -611,7 +609,7 @@
                         if (hitBrick && hitBrick.active) {
                             hitBrick.hitsRemaining--;
                             if (hitBrick.hitsRemaining > 0) {
-                                hitBrick.mesh.material.color.offsetHSL(0, 0, -0.2);
+                                hitBrick.mesh.material.color.offsetHSL(0, 0, -0.2); // Darken on hit
                             } else {
                                 hitBrick.active = false;
                                 hitBrick.mesh.visible = false;
@@ -674,7 +672,7 @@
                         currentBall.mesh.position.add(normal.multiplyScalar(pushDistance));
                         brick.hitsRemaining--;
                         if (brick.hitsRemaining > 0) {
-                            brick.mesh.material.color.offsetHSL(0, 0, -0.2);
+                            brick.mesh.material.color.offsetHSL(0, 0, -0.2); // Darken on hit
                         } else {
                             brick.active = false;
                             brick.mesh.visible = false;
@@ -716,7 +714,7 @@
             }
 
             increaseDifficulty() {
-                this.ballSpeed = Math.min(this.ballSpeed + 0.03, GAME_CONFIG.MAX_BALL_SPEED);
+                this.ballSpeed = Math.min(this.ballSpeed + 0.015, GAME_CONFIG.MAX_BALL_SPEED);
                 if (this.level > 1) {
                     this.paddleWidth = Math.max(
                         GAME_CONFIG.INITIAL_PADDLE_WIDTH - (this.level - 1) * GAME_CONFIG.PADDLE_WIDTH_DECREASE,
