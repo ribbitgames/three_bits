@@ -3,17 +3,29 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Emoji Catcher Game</title>
+    <title>Fruit Basket</title>
     <style>
-        body {
+        * {
             margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: Arial, sans-serif;
+            touch-action: none;
             overflow: hidden;
-            background: #87CEEB;
+            background: #1a1a1a;
             height: 100vh;
             display: flex;
             flex-direction: column;
             align-items: center;
-            touch-action: none;
+        }
+        html, body {
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
         }
         canvas {
             display: block;
@@ -24,26 +36,93 @@
             position: absolute;
             top: 10px;
             left: 10px;
-            font-family: Arial, sans-serif;
-            font-size: 24px;
+            padding: 5px 10px;
+            background-color: rgba(0, 0, 0, 0.5);
             color: white;
+            border-radius: 5px;
+            font-size: 18px;
         }
-        #game-over {
+        #game-overlay, #restart-overlay {
             position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            font-family: Arial, sans-serif;
-            font-size: 32px;
-            color: white;
-            text-align: center;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 20;
+            pointer-events: auto;
+        }
+        #game-overlay.hidden, #restart-overlay.hidden {
             display: none;
+        }
+        #game-menu, #restart-menu {
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            max-width: 80%;
+        }
+        h1 {
+            color: #0a0a2a;
+            margin-bottom: 20px;
+        }
+        button {
+            padding: 15px 25px;
+            font-size: 20px;
+            min-width: 150px;
+            min-height: 50px;
+            background-color: #ff4081;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 15px 0;
+            touch-action: manipulation;
+        }
+        button:hover {
+            background-color: #e91e63;
+        }
+        #instructions, #restart-info {
+            margin-top: 20px;
+            color: #333;
+            font-size: 16px;
+        }
+        #instructions p, #restart-info p {
+            margin: 5px 0;
         }
     </style>
 </head>
 <body>
     <div id="score">Score: 0</div>
-    <div id="game-over">Game Over!<br>Tap to Restart</div>
+    <div id="game-overlay">
+        <div id="game-menu">
+            <h1>Fruit Basket!</h1>
+            <button id="start-button">Start Game</button>
+            <div id="instructions">
+                <p>Catch falling fruits with your basket!</p>
+                <p>Move the basket by dragging or tapping.</p>
+                <p><span style="color: green;">🍎 +1 point, 🍏 +5 points</span></p>
+                <p><span style="color: red;">🐞 -2 points</span></p>
+            </div>
+        </div>
+    </div>
+    <div id="restart-overlay" class="hidden">
+        <div id="restart-menu">
+            <h1>Fruit Basket!</h1>
+            <button id="restart-button">Restart Game</button>
+            <div id="restart-info">
+                <p>Game Over!</p>
+                <p>Score: <span id="final-score">0</span></p>
+                <p>Catch falling fruits with your basket!</p>
+                <p>Move the basket by dragging or tapping.</p>
+                <p><span style="color: green;">🍎 +1 point, 🍏 +5 points</span></p>
+                <p><span style="color: red;">🐞 -2 points</span></p>
+            </div>
+        </div>
+    </div>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script>
         // Scene setup
@@ -57,7 +136,7 @@
             -frustumSize / 2,
             0.1, 1000
         );
-        const renderer = new THREE.WebGLRenderer();
+        const renderer = new THREE.WebGLRenderer({ alpha: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
         document.body.appendChild(renderer.domElement);
         camera.position.z = 5;
@@ -98,7 +177,7 @@
         scene.add(basket);
 
         // Timer display
-        let gameTime = 30;
+        let gameTime = 60;
         const timerTexture = createTextTexture(`Time: ${gameTime}`, 20);
         const timerMaterial = new THREE.SpriteMaterial({ map: timerTexture, transparent: true });
         const timerSprite = new THREE.Sprite(timerMaterial);
@@ -116,8 +195,8 @@
             const texture = createTextTexture(`${item.emoji} ${item.effect}`, 16, item.color);
             const material = new THREE.SpriteMaterial({ map: texture, transparent: true });
             const sprite = new THREE.Sprite(material);
-            sprite.scale.set(0.8, 0.4, 1);
-            sprite.position.set(-frustumSize * aspect / 2 + 0.6, 1 - index * 0.5, 1);
+            sprite.scale.set(0.6, 0.3, 1);
+            sprite.position.set(-frustumSize * aspect / 2 + 0.4, frustumSize / 2 - 0.4 - index * 0.2, 1);
             scene.add(sprite);
         });
 
@@ -126,9 +205,11 @@
         let score = 0;
         let misses = 0;
         let gameOver = false;
+        let gameStarted = false;
         let gameStartTime = Date.now();
         let lastSpawn = 0;
         let floatingScores = [];
+        let particles = [];
         let isDragging = false;
         let pointerX = basket.position.x;
         let lastSpawnX = null;
@@ -177,8 +258,29 @@
             floatingScores.push({ sprite, time: Date.now() });
         }
 
+        // Particle effect for catching apples
+        function createParticleEffect(x, y) {
+            const particleCount = 10;
+            for (let i = 0; i < particleCount; i++) {
+                const texture = createEmojiTexture('✨', 20);
+                const material = new THREE.SpriteMaterial({ map: texture, transparent: true });
+                const particle = new THREE.Sprite(material);
+                particle.scale.set(0.2, 0.2, 1);
+                particle.position.set(x, y, 1);
+                const angle = (i / particleCount) * Math.PI * 2;
+                particle.velocity = {
+                    x: Math.cos(angle) * (Math.random() * 0.05 + 0.02),
+                    y: Math.sin(angle) * (Math.random() * 0.05 + 0.02)
+                };
+                particle.life = 1.0;
+                scene.add(particle);
+                particles.push(particle);
+            }
+        }
+
         // Input handling
         document.addEventListener('mousedown', (e) => {
+            if (!gameStarted) return;
             isDragging = true;
             pointerX = camera.left + (e.clientX / window.innerWidth) * (camera.right - camera.left);
         });
@@ -193,6 +295,7 @@
 
         document.addEventListener('touchstart', (e) => {
             e.preventDefault();
+            if (!gameStarted) return;
             isDragging = true;
             pointerX = camera.left + (e.touches[0].clientX / window.innerWidth) * (camera.right - camera.left);
         }, { passive: false });
@@ -206,42 +309,63 @@
             isDragging = false;
         });
 
+        // Start game
+        const startButton = document.getElementById('start-button');
+        function startGame() {
+            gameStarted = true;
+            document.getElementById('game-overlay').classList.add('hidden');
+            gameStartTime = Date.now();
+            spawnObject();
+        }
+        startButton.addEventListener('click', startGame);
+        startButton.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            startGame();
+        });
+
         // Restart game
+        const restartButton = document.getElementById('restart-button');
         function restartGame(e) {
             if (gameOver && (e.type === 'click' || e.type === 'touchstart')) {
                 objects.forEach(obj => scene.remove(obj));
                 floatingScores.forEach(fs => scene.remove(fs.sprite));
+                particles.forEach(p => scene.remove(p));
                 objects = [];
                 floatingScores = [];
+                particles = [];
                 score = 0;
                 misses = 0;
                 gameOver = false;
+                gameStarted = true;
                 gameStartTime = Date.now();
                 lastSpawn = 0;
                 lastSpawnX = null;
-                document.getElementById('game-over').style.display = 'none';
+                document.getElementById('restart-overlay').classList.add('hidden');
                 spawnObject();
             }
         }
-        document.addEventListener('touchstart', restartGame);
-        document.addEventListener('click', restartGame);
+        restartButton.addEventListener('click', restartGame);
+        restartButton.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            restartGame(e);
+        });
 
         // Game loop
         function animate() {
-            if (gameOver) return requestAnimationFrame(animate);
+            if (!gameStarted || gameOver) return requestAnimationFrame(animate);
             requestAnimationFrame(animate);
             renderer.render(scene, camera);
 
             // Update timer
             const elapsed = (Date.now() - gameStartTime) / 1000;
-            gameTime = Math.max(0, 30 - Math.floor(elapsed));
+            gameTime = Math.max(0, 60 - Math.floor(elapsed));
             timerMaterial.map = createTextTexture(`Time: ${gameTime}`, 20);
             timerMaterial.map.needsUpdate = true;
 
             if (gameTime <= 0) {
                 gameOver = true;
-                document.getElementById('game-over').innerText = `Game Over!\nScore: ${score}\nTap to Restart`;
-                document.getElementById('game-over').style.display = 'block';
+                document.getElementById('final-score').innerText = score;
+                document.getElementById('restart-overlay').classList.remove('hidden');
                 return;
             }
 
@@ -252,7 +376,9 @@
                 basket.position.x = THREE.MathUtils.clamp(pointerX, clampMin, clampMax);
             }
 
-            if (Date.now() - lastSpawn > 1500) {
+            // Dynamic spawn interval: starts at 1500ms, decreases to 500ms over 60 seconds
+            const spawnInterval = 1500 - (elapsed / 60) * 1000;
+            if (Date.now() - lastSpawn > spawnInterval) {
                 spawnObject();
                 lastSpawn = Date.now();
             }
@@ -267,6 +393,7 @@
                         const points = obj.isGolden ? 5 : 1;
                         score += points;
                         createFloatingScore(`+${points}`, obj.position.x, obj.position.y + 0.5);
+                        createParticleEffect(obj.position.x, obj.position.y);
                     }
                     scene.remove(obj);
                     objects.splice(index, 1);
@@ -289,6 +416,18 @@
                     floatingScores.splice(index, 1);
                 }
             });
+
+            particles.forEach((particle, index) => {
+                particle.position.x += particle.velocity.x;
+                particle.position.y += particle.velocity.y;
+                particle.life -= 0.02;
+                particle.material.opacity = particle.life;
+                particle.scale.set(0.2 * particle.life, 0.2 * particle.life, 1);
+                if (particle.life <= 0) {
+                    scene.remove(particle);
+                    particles.splice(index, 1);
+                }
+            });
         }
 
         // Resize handler
@@ -304,13 +443,12 @@
             legendItems.forEach((_, index) => {
                 const sprite = scene.children.find(child => child.material && child.material.map && child.material.map.image && child.material.map.image.toDataURL().includes(legendItems[index].effect));
                 if (sprite) {
-                    sprite.position.set(-frustumSize * aspect / 2 + 0.6, 1 - index * 0.5, 1);
+                    sprite.position.set(-frustumSize * aspect / 2 + 0.4, frustumSize / 2 - 0.4 - index * 0.2, 1);
                 }
             });
         });
 
-        // Start game
-        spawnObject();
+        // Start animation
         animate();
     </script>
 </body>
