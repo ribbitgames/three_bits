@@ -170,7 +170,7 @@
             INITIAL_BALL_SPEED: 0.1,
             BALL_SPEED_INCREMENT: 0.001,
             BALL_SPEED_BRICK_BOOST: 0.02,
-            MAX_BALL_SPEED: 1,
+            MAX_BALL_SPEED: 0.75,
             BALL_RADIUS: 0.25,
             INITIAL_PADDLE_WIDTH: 2.0,
             MIN_PADDLE_WIDTH: 1.2,
@@ -540,17 +540,22 @@
             }
 
             checkPaddleCollision() {
-                if (this.ball.position.y - this.ballRadius <= this.paddle.position.y + this.paddleHeight / 2 &&
-                    this.ball.position.y + this.ballRadius >= this.paddle.position.y - this.paddleHeight / 2 &&
-                    this.ball.position.x + this.ballRadius >= this.paddle.position.x - this.paddleWidth / 2 &&
-                    this.ball.position.x - this.ballRadius <= this.paddle.position.x + this.paddleWidth / 2 &&
-                    this.ballVelocity.y < 0) {
-                    const hitPosition = (this.ball.position.x - this.paddle.position.x) / (this.paddleWidth / 2);
-                    const maxBounceAngle = Math.PI / 3;
-                    const bounceAngle = hitPosition * maxBounceAngle;
-                    this.ballSpeed = Math.min(this.ballSpeed + this.ballSpeedIncrement, GAME_CONFIG.MAX_BALL_SPEED);
-                    this.ballVelocity.x = Math.sin(bounceAngle) * this.ballSpeed;
-                    this.ballVelocity.y = Math.cos(bounceAngle) * this.ballSpeed;
+                for (let ballIndex = 0; ballIndex < this.balls.length; ballIndex++) {
+                    const currentBall = this.balls[ballIndex];
+                    const ballMesh = currentBall.mesh;
+                    const ballVelocity = currentBall.velocity;
+                    if (ballMesh.position.y - this.ballRadius <= this.paddle.position.y + this.paddleHeight / 2 &&
+                        ballMesh.position.y + this.ballRadius >= this.paddle.position.y - this.paddleHeight / 2 &&
+                        ballMesh.position.x + this.ballRadius >= this.paddle.position.x - this.paddleWidth / 2 &&
+                        ballMesh.position.x - this.ballRadius <= this.paddle.position.x + this.paddleWidth / 2 &&
+                        ballVelocity.y < 0) {
+                        const hitPosition = (ballMesh.position.x - this.paddle.position.x) / (this.paddleWidth / 2);
+                        const maxBounceAngle = Math.PI / 3;
+                        const bounceAngle = hitPosition * maxBounceAngle;
+                        this.ballSpeed = Math.min(this.ballSpeed + this.ballSpeedIncrement, GAME_CONFIG.MAX_BALL_SPEED);
+                        ballVelocity.x = Math.sin(bounceAngle) * this.ballSpeed;
+                        ballVelocity.y = Math.cos(bounceAngle) * this.ballSpeed;
+                    }
                 }
             }
 
