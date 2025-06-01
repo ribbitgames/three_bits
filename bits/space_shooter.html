@@ -67,61 +67,6 @@
             flex-grow: 1;
         }
 
-        #fire-button {
-            pointer-events: auto;
-            width: 60px;
-            height: 60px;
-            background-color: rgba(255, 0, 0, 0.6);
-            border: 2px solid rgba(255, 255, 255, 0.8);
-            border-radius: 50%;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            font-size: 14px;
-            font-weight: bold;
-            margin-right: 20px;
-            margin-bottom: 20px;
-            user-select: none;
-            opacity: 0.8;
-        }
-
-        #fire-button:active {
-            background-color: rgba(255, 100, 100, 0.8);
-            transform: scale(0.95);
-        }
-
-        #power-meter {
-            display: flex;
-            flex-direction: column;
-            background-color: rgba(0, 0, 0, 0.5);
-            border: 1px solid #444;
-            padding: 5px;
-            border-radius: 3px;
-            position: absolute;
-            left: 10px;
-            top: 50%;
-            transform: translateY(-50%);
-        }
-
-        .power-item {
-            padding: 3px 8px;
-            margin: 2px 0;
-            border-radius: 2px;
-            background-color: #333;
-            color: #ccc;
-            font-size: 12px;
-        }
-
-        .power-item.active {
-            background-color: #ffd700;
-            color: #000;
-        }
-
-        .power-item.selected {
-            background-color: #0f0;
-            color: #000;
-        }
-
         #start-screen, #game-over-screen {
             position: absolute;
             top: 0;
@@ -164,19 +109,6 @@
             #score, #lives {
                 font-size: 14px;
             }
-            
-            .power-item {
-                padding: 2px 6px;
-                font-size: 10px;
-            }
-            
-            #fire-button {
-                width: 50px;
-                height: 50px;
-                font-size: 12px;
-                margin-right: 15px;
-                margin-bottom: 15px;
-            }
         }
 
         @media (min-width: 768px) {
@@ -184,19 +116,6 @@
                 width: auto;
                 max-width: 300px;
                 margin: 0 auto;
-            }
-            
-            #power-meter {
-                top: auto;
-                bottom: 10px;
-                left: 10px;
-                transform: none;
-            }
-            
-            #fire-button {
-                width: 80px;
-                height: 80px;
-                font-size: 16px;
             }
         }
     </style>
@@ -210,14 +129,6 @@
                 <div id="lives">Lives: 3</div>
             </div>
             <div id="control-container">
-                <div id="fire-button">FIRE</div>
-            </div>
-            <div id="power-meter">
-                <div class="power-item" data-power="speed">Speed</div>
-                <div class="power-item" data-power="missile">Missile</div>
-                <div class="power-item" data-power="double">Double</div>
-                <div class="power-item" data-power="laser">Laser</div>
-                <div class="power-item" data-power="shield">Shield</div>
             </div>
         </div>
         <div id="start-screen">
@@ -250,11 +161,12 @@
             playerSpeed: 0.15,
             bulletSpeed: 0.5,
             enemySpeed: 0.05,
-            powerUpChance: 0.2,
+            powerUpChance: 0.5, // Chance for special enemy to drop power-up
             enemySpawnRate: 1000,
             maxPlayerLives: 3,
             playerInvincibleTime: 2000,
-            fireRate: 200
+            fireRate: 200,
+            specialEnemyChance: 0.1 // 10% chance for special enemy
         };
 
         // Game objects and variables
@@ -263,8 +175,6 @@
         let lastTime = 0;
         let score = 0;
         let lives = CONFIG.maxPlayerLives;
-        let powerLevel = 0;
-        let selectedPowerUp = -1;
         let player, playerLight;
         let playerPowerUps = {
             speed: 0,
@@ -279,7 +189,6 @@
         let enemies = [];
         let powerUps = [];
         let explosions = [];
-        let obstacles = [];
 
         // Timers and flags
         let lastEnemySpawn = 0;
@@ -315,29 +224,6 @@
                 restartButton.addEventListener('click', () => {
                     resetGame();
                 });
-            }
-
-            // Set up fire button
-            const fireButton = document.getElementById('fire-button');
-            if (fireButton) {
-                const fireDown = (e) => {
-                    e.preventDefault();
-                    if (gameState === GAME_STATE.PLAYING) {
-                        isPointerDown = true;
-                        firePlayerWeapon();
-                    }
-                };
-
-                fireButton.addEventListener('mousedown', fireDown);
-                fireButton.addEventListener('touchstart', fireDown, { passive: false });
-
-                const fireUp = (e) => {
-                    e.preventDefault();
-                    isPointerDown = false;
-                };
-
-                fireButton.addEventListener('mouseup', fireUp);
-                fireButton.addEventListener('touchend', fireUp);
             }
 
             // Initialize game only once
@@ -407,7 +293,6 @@
             // Update UI
             updateScoreDisplay();
             updateLivesDisplay();
-            updatePowerMeterDisplay();
 
             // Start animation loop
             animate(0);
@@ -564,60 +449,6 @@
                 scene.add(stars);
                 window.starLayers.push(stars);
             }
-
-            obstacles.forEach(obstacle => scene.remove(obstacle));
-            obstacles = [];
-            createScrollingObstacles();
-        }
-
-        /**
-         * Creates scrolling obstacles
-         */
-        function createScrollingObstacles() {
-            const wallGeometry = new THREE.BoxGeometry(2, 0.5, 0.5);
-            const wallMaterial = new THREE.MeshPhongMaterial({
-                color: 0x707070,
-                emissive: 0x202020,
-                shininess: 30
-            });
-
-            for (let y = -6; y < 20; y += 4) {
-                const leftWall = new THREE.Mesh(wallGeometry, wallMaterial);
-                leftWall.position.set(-4, y, 0);
-                leftWall.scrollSpeed = 0.1;
-                scene.add(leftWall);
-                obstacles.push(leftWall);
-
-                const rightWall = new THREE.Mesh(wallGeometry, wallMaterial);
-                rightWall.position.set(4, y, 0);
-                rightWall.scrollSpeed = 0.1;
-                scene.add(rightWall);
-                obstacles.push(rightWall);
-            }
-
-            const obstacleCount = 8;
-            const obstacleGeometry = new THREE.TetrahedronGeometry(0.3);
-            const obstacleMaterial = new THREE.MeshPhongMaterial({
-                color: 0xa04040,
-                emissive: 0x401010
-            });
-
-            for (let i = 0; i < obstacleCount; i++) {
-                const obstacle = new THREE.Mesh(obstacleGeometry, obstacleMaterial);
-                obstacle.position.set(
-                    Math.random() * 6 - 3,
-                    Math.random() * 20 - 5,
-                    0
-                );
-                obstacle.rotation.set(
-                    Math.random() * Math.PI,
-                    Math.random() * Math.PI,
-                    Math.random() * Math.PI
-                );
-                obstacle.scrollSpeed = 0.08 + Math.random() * 0.04;
-                scene.add(obstacle);
-                obstacles.push(obstacle);
-            }
         }
 
         /**
@@ -690,8 +521,6 @@
             gameState = GAME_STATE.PLAYING;
             score = 0;
             lives = CONFIG.maxPlayerLives;
-            powerLevel = 0;
-            selectedPowerUp = -1;
             playerPowerUps = {
                 speed: 0,
                 missile: false,
@@ -704,7 +533,6 @@
             player.shield.visible = false;
             updateScoreDisplay();
             updateLivesDisplay();
-            updatePowerMeterDisplay();
             document.getElementById('start-screen').classList.add('hidden');
         }
 
@@ -728,10 +556,6 @@
             powerUps = [];
             explosions.forEach(explosion => scene.remove(explosion));
             explosions = [];
-            for (let i = obstacles.length - 1; i >= 10; i--) {
-                scene.remove(obstacles[i]);
-                obstacles.splice(i, 1);
-            }
         }
 
         /**
@@ -758,47 +582,43 @@
         }
 
         /**
-         * Update power meter display
-         */
-        function updatePowerMeterDisplay() {
-            const powerItems = document.querySelectorAll('.power-item');
-            powerItems.forEach((item, index) => {
-                item.classList.remove('active', 'selected');
-                const powerType = item.dataset.power;
-                if (playerPowerUps[powerType] === true || (powerType === 'speed' && playerPowerUps.speed > 0)) {
-                    item.classList.add('active');
-                }
-                if (index === powerLevel) {
-                    item.classList.add('selected');
-                }
-            });
-        }
-
-        /**
-         * Creates an enemy at a random position
+         * Creates an enemy at a random position off-screen at the top
          */
         function spawnEnemy() {
-            const enemyTypes = [
+            const isSpecialEnemy = Math.random() < CONFIG.specialEnemyChance;
+            const enemyTypes = isSpecialEnemy ? [
+                {
+                    geometry: new THREE.OctahedronGeometry(0.4),
+                    color: 0x00ff00,
+                    emissive: 0x005500,
+                    health: 5,
+                    score: 500,
+                    isSpecial: true
+                }
+            ] : [
                 {
                     geometry: new THREE.BoxGeometry(0.3, 0.3, 0.3),
                     color: 0xff0000,
                     emissive: 0x500000,
                     health: 1,
-                    score: 100
+                    score: 100,
+                    isSpecial: false
                 },
                 {
                     geometry: new THREE.SphereGeometry(0.2, 8, 8),
                     color: 0xff5500,
                     emissive: 0x551500,
                     health: 2,
-                    score: 200
+                    score: 200,
+                    isSpecial: false
                 },
                 {
                     geometry: new THREE.TetrahedronGeometry(0.25),
                     color: 0xff0055,
                     emissive: 0x550015,
                     health: 3,
-                    score: 300
+                    score: 300,
+                    isSpecial: false
                 }
             ];
             const enemyType = enemyTypes[Math.floor(Math.random() * enemyTypes.length)];
@@ -810,12 +630,13 @@
             const enemy = new THREE.Mesh(enemyType.geometry, material);
             enemy.position.set(
                 Math.random() * 8 - 4,
-                5 + Math.random() * 2,
+                7,
                 0
             );
             enemy.health = enemyType.health;
             enemy.score = enemyType.score;
             enemy.speed = CONFIG.enemySpeed;
+            enemy.isSpecial = enemyType.isSpecial;
             scene.add(enemy);
             enemies.push(enemy);
         }
@@ -860,13 +681,9 @@
          * Collect power-up and apply effect
          */
         function collectPowerUp(powerUp) {
-            powerLevel++;
-            const powerItems = document.querySelectorAll('.power-item');
-            if (powerLevel <= powerItems.length) {
-                const powerType = powerItems[powerLevel - 1].dataset.power;
-                applyPowerUp(powerType);
-            }
-            updatePowerMeterDisplay();
+            const powerTypes = ['speed', 'missile', 'double', 'laser', 'shield'];
+            const powerType = powerTypes[Math.floor(Math.random() * powerTypes.length)];
+            applyPowerUp(powerType);
             scene.remove(powerUp);
             powerUps.splice(powerUps.indexOf(powerUp), 1);
         }
@@ -943,27 +760,12 @@
                             score += enemy.score;
                             updateScoreDisplay();
                             createExplosion(enemy.position);
-                            if (Math.random() < CONFIG.powerUpChance) {
+                            if (enemy.isSpecial && Math.random() < CONFIG.powerUpChance) {
                                 createPowerUp(enemy.position);
                             }
                             scene.remove(enemy);
                             enemies.splice(j, 1);
                         }
-                        break;
-                    }
-                }
-                for (let j = obstacles.length - 1; j >= 0; j--) {
-                    const obstacle = obstacles[j];
-                    const distance = bullet.position.distanceTo(obstacle.position);
-                    if (distance < 0.4) {
-                        if (bullet.isMissile) {
-                            createExplosion(obstacle.position, 1.5, 0xff5500);
-                            scene.remove(obstacle);
-                            obstacles.splice(j, 1);
-                        }
-                        scene.remove(bullet);
-                        bullets.splice(i, 1);
-                        createExplosion(bullet.position, 0.5, 0x00ffff);
                         break;
                     }
                 }
@@ -978,15 +780,6 @@
                     createExplosion(enemy.position);
                     scene.remove(enemy);
                     enemies.splice(i, 1);
-                    handlePlayerHit();
-                    break;
-                }
-            }
-
-            for (let i = obstacles.length - 1; i >= 0; i--) {
-                const obstacle = obstacles[i];
-                const distance = player.position.distanceTo(obstacle.position);
-                if (distance < 0.4) {
                     handlePlayerHit();
                     break;
                 }
@@ -1103,26 +896,6 @@
                     }
                     starLayer.geometry.attributes.position.needsUpdate = true;
                 });
-            }
-
-            for (let i = obstacles.length - 1; i >= 0; i--) {
-                const obstacle = obstacles[i];
-                obstacle.position.y -= obstacle.scrollSpeed * delta * 60;
-                obstacle.rotation.x += delta * 0.2;
-                obstacle.rotation.z += delta * 0.3;
-                if (obstacle.position.y < -10) {
-                    if (Math.abs(obstacle.position.x) === 4) {
-                        obstacle.position.y = 14;
-                    } else {
-                        obstacle.position.y = 10 + Math.random() * 5;
-                        obstacle.position.x = Math.random() * 6 - 3;
-                        obstacle.rotation.set(
-                            Math.random() * Math.PI,
-                            Math.random() * Math.PI,
-                            Math.random() * Math.PI
-                        );
-                    }
-                }
             }
 
             for (let i = bullets.length - 1; i >= 0; i--) {
