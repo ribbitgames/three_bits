@@ -161,12 +161,17 @@
             playerSpeed: 0.15,
             bulletSpeed: 0.5,
             enemySpeed: 0.05,
-            powerUpChance: 0.5, // Chance for special enemy to drop power-up
+            powerUpChance: 0.5,
             enemySpawnRate: 1000,
             maxPlayerLives: 3,
             playerInvincibleTime: 2000,
             fireRate: 200,
-            specialEnemyChance: 0.1 // 10% chance for special enemy
+            specialEnemyChance: 0.1,
+            obstacleSpawnRate: 5000,
+            obstacleSpeed: 0.03,
+            enemyProjectileSpeed: 0.15,
+            enemyFireRate: 2000,
+            missileMinScore: 1000
         };
 
         // Game objects and variables
@@ -189,10 +194,13 @@
         let enemies = [];
         let powerUps = [];
         let explosions = [];
+        let obstacles = [];
+        let enemyProjectiles = [];
 
         // Timers and flags
         let lastEnemySpawn = 0;
         let lastFireTime = 0;
+        let lastObstacleSpawn = 0;
         let isPointerDown = false;
         let playerInvincible = false;
         let playerInvincibleTimer = 0;
@@ -556,6 +564,10 @@
             powerUps = [];
             explosions.forEach(explosion => scene.remove(explosion));
             explosions = [];
+            obstacles.forEach(obstacle => scene.remove(obstacle));
+            obstacles = [];
+            enemyProjectiles.forEach(projectile => scene.remove(projectile));
+            enemyProjectiles = [];
         }
 
         /**
@@ -593,7 +605,8 @@
                     emissive: 0x005500,
                     health: 5,
                     score: 500,
-                    isSpecial: true
+                    isSpecial: true,
+                    canShoot: true
                 }
             ] : [
                 {
@@ -602,7 +615,8 @@
                     emissive: 0x500000,
                     health: 1,
                     score: 100,
-                    isSpecial: false
+                    isSpecial: false,
+                    canShoot: false
                 },
                 {
                     geometry: new THREE.SphereGeometry(0.2, 8, 8),
@@ -610,7 +624,8 @@
                     emissive: 0x551500,
                     health: 2,
                     score: 200,
-                    isSpecial: false
+                    isSpecial: false,
+                    canShoot: false
                 },
                 {
                     geometry: new THREE.TetrahedronGeometry(0.25),
@@ -618,7 +633,8 @@
                     emissive: 0x550015,
                     health: 3,
                     score: 300,
-                    isSpecial: false
+                    isSpecial: false,
+                    canShoot: false
                 }
             ];
             const enemyType = enemyTypes[Math.floor(Math.random() * enemyTypes.length)];
@@ -637,8 +653,34 @@
             enemy.score = enemyType.score;
             enemy.speed = CONFIG.enemySpeed;
             enemy.isSpecial = enemyType.isSpecial;
+            enemy.canShoot = enemyType.canShoot;
+            enemy.lastShotTime = 0;
             scene.add(enemy);
             enemies.push(enemy);
+        }
+
+        /**
+         * Spawn an indestructible obstacle
+         */
+        function spawnObstacle() {
+            const isRectangle = Math.random() < 0.5;
+            const obstacleGeometry = isRectangle
+                ? new THREE.BoxGeometry(0.8, 0.4, 0.4)
+                : new THREE.BoxGeometry(0.5, 0.5, 0.5);
+            const obstacleMaterial = new THREE.MeshPhongMaterial({
+                color: 0x555555,
+                emissive: 0x222222,
+                shininess: 10
+            });
+            const obstacle = new THREE.Mesh(obstacleGeometry, obstacleMaterial);
+            obstacle.position.set(
+                Math.random() * 8 - 4,
+                7,
+                0
+            );
+            obstacle.speed = CONFIG.obstacleSpeed;
+            scene.add(obstacle);
+            obstacles.push(obstacle);
         }
 
         /**
@@ -646,7 +688,8 @@
          */
         function firePlayerWeapon() {
             const bulletGeometry = new THREE.SphereGeometry(0.1, 8, 8);
-            const bulletMaterial = new THREE.MeshBasicMaterial({ color: 0x00ffff });
+            const bulletColor = playerPowerUps.laser ? 0xff00ff : 0x00ffff; // Magenta for laser, cyan for normal
+            const bulletMaterial = new THREE.MeshBasicMaterial({ color: bulletColor });
 
             function createBullet(offsetX = 0) {
                 const bullet = new THREE.Mesh(bulletGeometry, bulletMaterial);
@@ -670,7 +713,7 @@
                 const missile = new THREE.Mesh(missileGeometry, missileMaterial);
                 missile.position.set(player.position.x - 0.3, player.position.y, 0);
                 missile.speed = CONFIG.bulletSpeed * 0.7;
-                missile.power = 3;
+                missile.power = 0.9;
                 missile.isMissile = true;
                 scene.add(missile);
                 bullets.push(missile);
@@ -678,10 +721,27 @@
         }
 
         /**
+         * Fire enemy projectile
+         */
+        function fireEnemyProjectile(enemy) {
+            const projectileGeometry = new THREE.SphereGeometry(0.08, 8, 8);
+            const projectileMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+            const projectile = new THREE.Mesh(projectileGeometry, projectileMaterial);
+            projectile.position.set(enemy.position.x, enemy.position.y - 0.3, 0);
+            projectile.speed = CONFIG.enemyProjectileSpeed;
+            scene.add(projectile);
+            enemyProjectiles.push(projectile);
+            enemy.lastShotTime = performance.now();
+        }
+
+        /**
          * Collect power-up and apply effect
          */
         function collectPowerUp(powerUp) {
-            const powerTypes = ['speed', 'missile', 'double', 'laser', 'shield'];
+            let powerTypes = ['speed', 'double', 'laser', 'shield'];
+            if (score >= CONFIG.missileMinScore) {
+                powerTypes.push('missile');
+            }
             const powerType = powerTypes[Math.floor(Math.random() * powerTypes.length)];
             applyPowerUp(powerType);
             scene.remove(powerUp);
@@ -746,6 +806,7 @@
          * Check collisions between game objects
          */
         function checkCollisions() {
+            // Bullet-enemy collisions
             for (let i = bullets.length - 1; i >= 0; i--) {
                 const bullet = bullets[i];
                 for (let j = enemies.length - 1; j >= 0; j--) {
@@ -773,6 +834,7 @@
 
             if (playerInvincible) return;
 
+            // Player-enemy collisions
             for (let i = enemies.length - 1; i >= 0; i--) {
                 const enemy = enemies[i];
                 const distance = player.position.distanceTo(enemy.position);
@@ -785,11 +847,34 @@
                 }
             }
 
+            // Player-obstacle collisions
+            for (let i = obstacles.length - 1; i >= 0; i--) {
+                const obstacle = obstacles[i];
+                const distance = player.position.distanceTo(obstacle.position);
+                if (distance < 0.5) {
+                    handlePlayerHit();
+                    break;
+                }
+            }
+
+            // Player-power-up collisions
             for (let i = powerUps.length - 1; i >= 0; i--) {
                 const powerUp = powerUps[i];
                 const distance = player.position.distanceTo(powerUp.position);
                 if (distance < 0.4) {
                     collectPowerUp(powerUp);
+                }
+            }
+
+            // Player-enemy projectile collisions
+            for (let i = enemyProjectiles.length - 1; i >= 0; i--) {
+                const projectile = enemyProjectiles[i];
+                const distance = player.position.distanceTo(projectile.position);
+                if (distance < 0.3) {
+                    scene.remove(projectile);
+                    enemyProjectiles.splice(i, 1);
+                    handlePlayerHit();
+                    break;
                 }
             }
         }
@@ -931,6 +1016,9 @@
                 enemy.position.x += Math.sin(time * 0.001 + enemy.position.y) * enemy.speed * 0.5 * delta * 60;
                 enemy.rotation.x += delta;
                 enemy.rotation.z += delta * 0.5;
+                if (enemy.canShoot && performance.now() - enemy.lastShotTime >= CONFIG.enemyFireRate) {
+                    fireEnemyProjectile(enemy);
+                }
                 if (enemy.position.y < -6) {
                     scene.remove(enemy);
                     enemies.splice(i, 1);
@@ -946,6 +1034,26 @@
                 if (powerUp.position.y < -6) {
                     scene.remove(powerUp);
                     powerUps.splice(i, 1);
+                }
+            }
+
+            for (let i = obstacles.length - 1; i >= 0; i--) {
+                const obstacle = obstacles[i];
+                obstacle.position.y -= obstacle.speed * delta * 60;
+                obstacle.rotation.x += delta * 0.5;
+                obstacle.rotation.y += delta * 0.5;
+                if (obstacle.position.y < -6) {
+                    scene.remove(obstacle);
+                    obstacles.splice(i, 1);
+                }
+            }
+
+            for (let i = enemyProjectiles.length - 1; i >= 0; i--) {
+                const projectile = enemyProjectiles[i];
+                projectile.position.y -= projectile.speed * delta * 60;
+                if (projectile.position.y < -6) {
+                    scene.remove(projectile);
+                    enemyProjectiles.splice(i, 1);
                 }
             }
 
@@ -974,6 +1082,11 @@
                 spawnEnemy();
                 lastEnemySpawn = time;
                 CONFIG.enemySpawnRate = Math.max(300, CONFIG.enemySpawnRate - 5);
+            }
+
+            if (time - lastObstacleSpawn > CONFIG.obstacleSpawnRate) {
+                spawnObstacle();
+                lastObstacleSpawn = time;
             }
         }
     </script>
