@@ -247,12 +247,49 @@
             transform: translateY(-2px);
             box-shadow: 0 6px 20px rgba(102, 102, 102, 0.4);
         }
+        
+        /* Coin Collection Feedback Styles */
+        .coin-feedback {
+            position: absolute;
+            z-index: 10;
+            pointer-events: none;
+            color: #FFD700;
+            font-size: 24px;
+            font-weight: bold;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+            animation: coinFeedback 1.5s ease-out forwards;
+        }
+        
+        @keyframes coinFeedback {
+            0% {
+                opacity: 1;
+                transform: scale(0.5) translateY(0);
+            }
+            50% {
+                opacity: 1;
+                transform: scale(1.2) translateY(-30px);
+            }
+            100% {
+                opacity: 0;
+                transform: scale(1) translateY(-60px);
+            }
+        }
+        
         @keyframes pulse {
             0%, 100% { transform: scale(1); }
             50% { transform: scale(1.05); }
         }
         .pulse-animation {
             animation: pulse 2s infinite;
+        }
+        
+        @keyframes scoreFlash {
+            0% { color: #FFD700; transform: scale(1); }
+            50% { color: #FFFF00; transform: scale(1.1); }
+            100% { color: #FFD700; transform: scale(1); }
+        }
+        .score-flash {
+            animation: scoreFlash 0.3s ease-out;
         }
     </style>
 </head>
@@ -668,6 +705,100 @@
             isFalling = false;
         }
 
+        // Coin collection feedback functions
+        function createCoinFeedback(worldPosition) {
+            // Convert 3D world position to 2D screen position
+            const vector = new THREE.Vector3();
+            vector.copy(worldPosition);
+            vector.project(camera);
+            
+            const screenX = (vector.x * 0.5 + 0.5) * window.innerWidth;
+            const screenY = (vector.y * -0.5 + 0.5) * window.innerHeight;
+            
+            // Create floating text element
+            const feedbackElement = document.createElement('div');
+            feedbackElement.className = 'coin-feedback';
+            feedbackElement.textContent = '+100';
+            feedbackElement.style.left = screenX + 'px';
+            feedbackElement.style.top = screenY + 'px';
+            
+            document.body.appendChild(feedbackElement);
+            
+            // Remove element after animation completes
+            setTimeout(() => {
+                if (feedbackElement.parentNode) {
+                    feedbackElement.parentNode.removeChild(feedbackElement);
+                }
+            }, 1500);
+        }
+
+        function createCoinParticles(position) {
+            const particleCount = 8;
+            const particles = [];
+            
+            for (let i = 0; i < particleCount; i++) {
+                const particle = new THREE.Mesh(
+                    new THREE.SphereGeometry(0.02, 6, 6),
+                    new THREE.MeshBasicMaterial({ 
+                        color: 0xFFD700, 
+                        transparent: true, 
+                        opacity: 0.8 
+                    })
+                );
+                
+                particle.position.copy(position);
+                particle.userData = {
+                    velocity: new THREE.Vector3(
+                        (Math.random() - 0.5) * 0.15,
+                        Math.random() * 0.1 + 0.05,
+                        (Math.random() - 0.5) * 0.15
+                    ),
+                    life: 1.0,
+                    decay: 0.025
+                };
+                
+                scene.add(particle);
+                particles.push(particle);
+            }
+            
+            const animateParticles = () => {
+                let aliveParticles = 0;
+                
+                particles.forEach(particle => {
+                    if (particle.userData.life > 0) {
+                        particle.position.add(particle.userData.velocity);
+                        particle.userData.velocity.y -= 0.008; // gravity
+                        particle.userData.life -= particle.userData.decay;
+                        particle.material.opacity = particle.userData.life;
+                        particle.scale.setScalar(particle.userData.life);
+                        aliveParticles++;
+                    } else {
+                        scene.remove(particle);
+                    }
+                });
+                
+                if (aliveParticles > 0) {
+                    requestAnimationFrame(animateParticles);
+                } else {
+                    particles.forEach(particle => scene.remove(particle));
+                }
+            };
+            
+            animateParticles();
+        }
+
+        function flashScore() {
+            const scoreElement = document.getElementById('score');
+            scoreElement.classList.remove('score-flash');
+            // Force reflow to restart animation
+            void scoreElement.offsetWidth;
+            scoreElement.classList.add('score-flash');
+            
+            setTimeout(() => {
+                scoreElement.classList.remove('score-flash');
+            }, 300);
+        }
+
         function startJoystick(x, y, pointerType) {
             if (gameState !== GAME_STATE.PLAYING || joystickActive) return;
             currentPointerType = pointerType;
@@ -853,6 +984,7 @@
         function addScore(points) {
             score += points;
             updateScore();
+            flashScore();
         }
 
         function updateTimer() {
@@ -905,6 +1037,11 @@
                     if (distance < SETTINGS.marbleRadius + 0.3) {
                         coin.userData.collected = true;
                         coin.visible = false;
+                        
+                        // Create visual feedback
+                        createCoinFeedback(coin.position);
+                        createCoinParticles(coin.position);
+                        
                         addScore(100);
                     }
                 }
