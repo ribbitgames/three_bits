@@ -178,6 +178,75 @@
             border-radius: 2px;
             margin-right: 6px;
         }
+        #game-over-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: linear-gradient(135deg, rgba(139, 0, 0, 0.9), rgba(0, 0, 0, 0.8));
+            color: white;
+            z-index: 3;
+            backdrop-filter: blur(20px);
+        }
+        
+        #level-complete-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: linear-gradient(135deg, rgba(0, 139, 0, 0.9), rgba(0, 50, 0, 0.8));
+            color: white;
+            z-index: 3;
+            backdrop-filter: blur(20px);
+        }
+        
+        .screen-title {
+            margin-bottom: 20px;
+            font-size: 36px;
+            text-align: center;
+            font-weight: bold;
+        }
+        
+        .screen-message {
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 18px;
+            line-height: 1.5;
+        }
+        
+        .button-container {
+            display: flex;
+            gap: 20px;
+        }
+        
+        .secondary-button {
+            padding: 18px 36px;
+            font-size: 20px;
+            background: linear-gradient(45deg, #666, #555);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            touch-action: manipulation;
+            box-shadow: 0 4px 15px rgba(102, 102, 102, 0.3);
+            font-weight: bold;
+        }
+        
+        .secondary-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 102, 102, 0.4);
+        }
         @keyframes pulse {
             0%, 100% { transform: scale(1); }
             50% { transform: scale(1.05); }
@@ -236,6 +305,31 @@
             </div>
             <button id="start-button" class="pulse-animation">Start Adventure</button>
         </div>
+        
+        <div id="game-over-screen">
+            <div class="screen-title">Game Over!</div>
+            <div class="screen-message">
+                Your marble was destroyed!<br>
+                Score: <span id="final-score">0</span>
+            </div>
+            <div class="button-container">
+                <button id="restart-level-button">Restart Level</button>
+                <button id="main-menu-button" class="secondary-button">Main Menu</button>
+            </div>
+        </div>
+        
+        <div id="level-complete-screen">
+            <div class="screen-title">Level Complete!</div>
+            <div class="screen-message">
+                Excellent work!<br>
+                Level <span id="completed-level">1</span> finished<br>
+                Score: <span id="level-score">0</span>
+            </div>
+            <div class="button-container">
+                <button id="next-level-button">Next Level</button>
+                <button id="menu-button" class="secondary-button">Main Menu</button>
+            </div>
+        </div>
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -256,9 +350,18 @@
         const joystickKnob = document.getElementById('joystick-knob');
         const startScreen = document.getElementById('start-screen');
         const startButton = document.getElementById('start-button');
+        const gameOverScreen = document.getElementById('game-over-screen');
+        const levelCompleteScreen = document.getElementById('level-complete-screen');
+        const restartLevelButton = document.getElementById('restart-level-button');
+        const mainMenuButton = document.getElementById('main-menu-button');
+        const nextLevelButton = document.getElementById('next-level-button');
+        const menuButton = document.getElementById('menu-button');
         const timeValue = document.getElementById('time-value');
         const levelNumber = document.getElementById('level-number');
         const scoreValue = document.getElementById('score-value');
+        const finalScore = document.getElementById('final-score');
+        const levelScore = document.getElementById('level-score');
+        const completedLevel = document.getElementById('completed-level');
 
         function init() {
             renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('game-canvas'), antialias: true });
@@ -351,49 +454,31 @@
                         else if (roll < params.empty + params.ice + params.sticky) grid[y][x] = SURFACE.STICKY;
                         else if (roll < params.empty + params.ice + params.sticky + params.acid) grid[y][x] = SURFACE.ACID;
                         else if (roll < params.empty + params.ice + params.sticky + params.acid + params.elevated) grid[y][x] = SURFACE.ELEVATED;
-                        else if (roll < params.empty + params.ice + params.sticky + params.acid + params.elevated + params.coins) grid[y][x] = SURFACE.COIN;
                     }
                 }
             }
 
-            // Place coins only on safe, reachable tiles
-            const safeTiles = [];
+            // Place coins only on existing solid tiles
             for (let y = 0; y < height; y++) {
                 for (let x = 0; x < width; x++) {
                     const tileType = grid[y][x];
-                    if (tileType === SURFACE.NORMAL || tileType === SURFACE.ICE || 
-                        tileType === SURFACE.STICKY || tileType === SURFACE.ELEVATED) {
+                    if ((tileType === SURFACE.NORMAL || tileType === SURFACE.ICE || 
+                         tileType === SURFACE.STICKY || tileType === SURFACE.ELEVATED) &&
+                        rng.random() < params.coins) {
                         const dist = Math.sqrt(Math.pow(x - startX, 2) + Math.pow(y - startY, 2));
-                        if (dist > 2) safeTiles.push({ x, y });
+                        if (dist > 2) {
+                            grid[y][x] = SURFACE.COIN;
+                        }
                     }
                 }
-            }
-            
-            // Reset coin tiles and place them on safe tiles
-            for (let y = 0; y < height; y++) {
-                for (let x = 0; x < width; x++) {
-                    if (grid[y][x] === SURFACE.COIN) {
-                        grid[y][x] = SURFACE.NORMAL;
-                    }
-                }
-            }
-            
-            // Randomly place coins on safe tiles
-            const numCoins = Math.min(Math.floor(safeTiles.length * params.coins), safeTiles.length);
-            for (let i = safeTiles.length - 1; i > 0; i--) {
-                const j = Math.floor(rng.random() * (i + 1));
-                [safeTiles[i], safeTiles[j]] = [safeTiles[j], safeTiles[i]];
-            }
-            for (let i = 0; i < numCoins; i++) {
-                const tile = safeTiles[i];
-                grid[tile.y][tile.x] = SURFACE.COIN;
             }
 
             if (params.enemies > 0) {
                 const potentialEnemySpots = [];
                 for (let y = 0; y < height; y++) {
                     for (let x = 0; x < width; x++) {
-                        if (grid[y][x] === SURFACE.NORMAL) {
+                        if (grid[y][x] === SURFACE.NORMAL || grid[y][x] === SURFACE.ICE || 
+                            grid[y][x] === SURFACE.STICKY || grid[y][x] === SURFACE.ELEVATED) {
                             const dist = Math.sqrt(Math.pow(x - startX, 2) + Math.pow(y - startY, 2));
                             if (dist > 4) potentialEnemySpots.push({ x, y });
                         }
@@ -518,6 +603,14 @@
                     }
                     
                     if (tileType === SURFACE.COIN) {
+                        // Create the base tile underneath the coin
+                        const baseTile = new THREE.Mesh(new THREE.BoxGeometry(1, 0.5, 1), materials[SURFACE.NORMAL]);
+                        baseTile.position.set(x + offsetX, -0.25, z + offsetZ);
+                        baseTile.userData = { type: SURFACE.NORMAL };
+                        baseTile.castShadow = true;
+                        baseTile.receiveShadow = true;
+                        levelGroup.add(baseTile);
+                        
                         createCoin(x + offsetX, z + offsetZ);
                     }
                 }
@@ -554,11 +647,11 @@
         }
 
         function createCoin(x, z) {
-            const coinGeometry = new THREE.CylinderGeometry(0.3, 0.3, 0.1, 16);
+            const coinGeometry = new THREE.CylinderGeometry(0.225, 0.225, 0.075, 16);
             const coinMaterial = new THREE.MeshPhongMaterial({ color: 0xFFD700, emissive: 0x332200 });
             const coin = new THREE.Mesh(coinGeometry, coinMaterial);
             coin.position.set(x, 0.5, z);
-            coin.rotation.z = Math.PI / 2; // Rotate to spin vertically
+            coin.rotation.x = Math.PI / 2; // Make vertical (standing up)
             coin.userData = { type: SURFACE.COIN, collected: false };
             coin.castShadow = true;
             levelGroup.add(coin);
@@ -661,6 +754,10 @@
 
             window.addEventListener('resize', onWindowResize);
             startButton.addEventListener('click', startGame);
+            restartLevelButton.addEventListener('click', restartLevel);
+            mainMenuButton.addEventListener('click', goToMainMenu);
+            nextLevelButton.addEventListener('click', nextLevel);
+            menuButton.addEventListener('click', goToMainMenu);
         }
 
         function onWindowResize() {
@@ -692,6 +789,7 @@
         }
 
         function nextLevel() {
+            levelCompleteScreen.style.display = 'none';
             currentLevel++;
             gameState = GAME_STATE.PLAYING;
             
@@ -708,9 +806,33 @@
             }
             
             createLevel();
-            timeLeft += 30; // Bonus time for completing level
+            timeLeft += 30;
             startTime = Date.now() - (SETTINGS.timeLimit - timeLeft) * 1000;
             resetJoystick();
+        }
+
+        function restartLevel() {
+            gameOverScreen.style.display = 'none';
+            gameState = GAME_STATE.PLAYING;
+            
+            if (levelGroup) scene.remove(levelGroup);
+            if (marble) scene.remove(marble);
+            
+            createMarble();
+            createLevel();
+            timeLeft = SETTINGS.timeLimit + 30 * (currentLevel - 1);
+            startTime = Date.now();
+            resetJoystick();
+        }
+
+        function goToMainMenu() {
+            gameOverScreen.style.display = 'none';
+            levelCompleteScreen.style.display = 'none';
+            startScreen.style.display = 'flex';
+            gameState = GAME_STATE.MENU;
+            
+            if (levelGroup) scene.remove(levelGroup);
+            if (marble) scene.remove(marble);
         }
 
         function gameOver() {
@@ -751,7 +873,7 @@
                     timeValue.style.fontWeight = 'normal';
                 }
                 
-                if (timeLeft <= 0) gameOver();
+                if (timeLeft <= 0) disintegrateMarble();
             }
         }
 
@@ -819,11 +941,11 @@
         }
 
         function updateCoins() {
-            const time = Date.now() * 0.002;
+            const time = Date.now() * 0.005;
             for (const coin of coins) {
                 if (!coin.userData.collected) {
-                    coin.rotation.x = time; // Spin vertically around x-axis
-                    coin.position.y = 0.5 + Math.sin(time * 2) * 0.1;
+                    coin.rotation.z = time; // Spin around Z-axis for vertical coin spinning
+                    coin.position.y = 0.5 + Math.sin(time * 1.5) * 0.1;
                 }
             }
         }
@@ -878,14 +1000,15 @@
 
                 marble.position.y += marbleVelocity.y;
 
-                if (marble.position.y < -5) {
+                // Fixed: Disintegrate marble when falling in a hole
+                if (marble.position.y < -2) {
                     disintegrateMarble();
                     return;
                 }
 
                 if (isMarbleAtGoal()) {
-                    addScore(currentLevel * 50); // Bonus points for completing level
-                    nextLevel();
+                    addScore(currentLevel * 50);
+                    showLevelComplete();
                 }
 
                 if (isMarbleTouchingEnemy()) {
@@ -895,6 +1018,14 @@
 
                 checkCoinCollisions();
             }
+        }
+
+        function showLevelComplete() {
+            gameState = GAME_STATE.WIN;
+            resetJoystick();
+            completedLevel.textContent = currentLevel;
+            levelScore.textContent = score;
+            levelCompleteScreen.style.display = 'flex';
         }
 
         function disintegrateMarble() {
@@ -946,9 +1077,9 @@
                     if (gameState === GAME_STATE.GAME_OVER) {
                         resetJoystick();
                         setTimeout(() => {
-                            startScreen.style.display = 'flex';
-                            gameState = GAME_STATE.MENU;
-                        }, 1000);
+                            finalScore.textContent = score;
+                            gameOverScreen.style.display = 'flex';
+                        }, 500);
                     }
                 }
             };
