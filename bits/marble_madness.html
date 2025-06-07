@@ -12,8 +12,8 @@
         }
         body {
             overflow: hidden;
-            background-color: #000;
-            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             touch-action: none;
             -webkit-user-select: none;
             user-select: none;
@@ -34,18 +34,34 @@
         }
         #ui-container {
             position: absolute;
-            top: 10px;
-            left: 10px;
+            top: 15px;
+            left: 15px;
             z-index: 2;
             color: white;
             font-size: 18px;
-            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.7);
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
             pointer-events: none;
+            background: rgba(0, 0, 0, 0.3);
+            padding: 15px;
+            border-radius: 12px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
         }
         #timer {
-            margin-bottom: 5px;
+            margin-bottom: 8px;
+            font-weight: bold;
         }
-        #start-screen, #end-screen, #level-complete-screen {
+        #level-info {
+            font-size: 16px;
+            opacity: 0.9;
+            margin-bottom: 8px;
+        }
+        #score {
+            font-size: 16px;
+            color: #FFD700;
+            font-weight: bold;
+        }
+        #start-screen {
             position: absolute;
             top: 0;
             left: 0;
@@ -55,67 +71,119 @@
             flex-direction: column;
             justify-content: center;
             align-items: center;
-            background-color: rgba(0, 0, 0, 0.8);
+            background: linear-gradient(135deg, rgba(0, 0, 0, 0.9), rgba(30, 60, 114, 0.8));
             color: white;
             z-index: 3;
+            backdrop-filter: blur(20px);
         }
-        #end-screen, #level-complete-screen {
-            display: none;
-        }
-        h1, h2 {
+        h1 {
             margin-bottom: 30px;
-            font-size: 36px;
+            font-size: 48px;
             text-align: center;
+            background: linear-gradient(45deg, #FFD700, #FFA500);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            text-shadow: none;
+        }
+        .game-info {
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 18px;
+            line-height: 1.6;
+            max-width: 600px;
+            opacity: 0.9;
         }
         button {
-            padding: 15px 30px;
-            font-size: 18px;
-            background-color: #4CAF50;
+            padding: 18px 36px;
+            font-size: 20px;
+            background: linear-gradient(45deg, #4CAF50, #45a049);
             color: white;
             border: none;
-            border-radius: 5px;
+            border-radius: 12px;
             cursor: pointer;
-            transition: background-color 0.3s;
+            transition: all 0.3s ease;
             touch-action: manipulation;
+            box-shadow: 0 4px 15px rgba(76, 175, 80, 0.3);
+            font-weight: bold;
         }
         button:hover {
-            background-color: #45a049;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(76, 175, 80, 0.4);
         }
-        #status {
-            font-size: 24px;
-            text-align: center;
-            opacity: 0;
-            transition: opacity 0.5s;
-            pointer-events: none;
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            z-index: 4;
+        button:active {
+            transform: translateY(0);
         }
         #joystick-base {
             position: absolute;
-            width: 100px;
-            height: 100px;
+            width: 120px;
+            height: 120px;
             border-radius: 50%;
-            background: rgba(255, 255, 255, 0.1);
-            border: 2px solid rgba(255, 255, 255, 0.3);
+            background: rgba(255, 255, 255, 0.15);
+            border: 3px solid rgba(255, 255, 255, 0.4);
             display: none;
             z-index: 5;
             transform: translate(-50%, -50%);
             touch-action: none;
             pointer-events: none;
+            backdrop-filter: blur(5px);
+            box-shadow: 0 0 20px rgba(255, 255, 255, 0.2);
         }
         #joystick-knob {
-            width: 50px;
-            height: 50px;
-            background: rgba(255, 255, 255, 0.6);
+            width: 60px;
+            height: 60px;
+            background: linear-gradient(45deg, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.7));
             border-radius: 50%;
             position: absolute;
-            top: 25px;
-            left: 25px;
+            top: 30px;
+            left: 30px;
             transform: translate(-50%, -50%);
             pointer-events: none;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+            border: 2px solid rgba(255, 255, 255, 0.5);
+        }
+        #controls-help {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.6);
+            color: white;
+            padding: 10px 15px;
+            border-radius: 8px;
+            font-size: 14px;
+            opacity: 0.8;
+            z-index: 2;
+        }
+        #surface-legend {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: rgba(0, 0, 0, 0.4);
+            color: white;
+            padding: 12px;
+            border-radius: 10px;
+            font-size: 12px;
+            z-index: 2;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 4px;
+        }
+        .legend-color {
+            width: 12px;
+            height: 12px;
+            border-radius: 2px;
+            margin-right: 6px;
+        }
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+        .pulse-animation {
+            animation: pulse 2s infinite;
         }
     </style>
 </head>
@@ -124,55 +192,80 @@
         <canvas id="game-canvas"></canvas>
         <div id="ui-container">
             <div id="timer">Time: <span id="time-value">60</span></div>
+            <div id="level-info">Level <span id="level-number">1</span></div>
+            <div id="score">Score: <span id="score-value">0</span></div>
             <div id="joystick-base">
                 <div id="joystick-knob"></div>
             </div>
         </div>
+        <div id="surface-legend">
+            <div class="legend-item">
+                <div class="legend-color" style="background: #32CD32;"></div>
+                <span>Start/Goal</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #ADD8E6;"></div>
+                <span>Ice (Slippery)</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #8B4513;"></div>
+                <span>Sticky (Slow)</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #FF0000;"></div>
+                <span>Acid (Death)</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #9370DB;"></div>
+                <span>Elevated</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #FFD700;"></div>
+                <span>Coin (+100)</span>
+            </div>
+        </div>
+        <div id="controls-help">
+            Touch/Click and drag to move marble
+        </div>
         <div id="start-screen">
             <h1>Marble Madness</h1>
-            <button id="start-button">Start Game</button>
+            <div class="game-info">
+                Navigate your marble through infinite levels!<br>
+                Avoid slinkies, acid, and falling off edges.<br>
+                Collect coins for bonus points!
+            </div>
+            <button id="start-button" class="pulse-animation">Start Adventure</button>
         </div>
-        <div id="end-screen">
-            <h2 id="end-message"></h2>
-            <button id="restart-button">Play Again</button>
-        </div>
-        <div id="level-complete-screen">
-            <h2 id="level-complete-message">Level Completed!</h2>
-            <button id="continue-button">Continue</button>
-        </div>
-        <div id="status"></div>
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script>
         const GAME_STATE = { MENU: 0, PLAYING: 1, GAME_OVER: 2, WIN: 3 };
-        const SETTINGS = { marbleRadius: 0.5, cameraDistance: 15, timeLimit: 60, gravity: 0.015, iceMultiplier: 1.5, stickyMultiplier: 0.5, enemyStartLevel: 3, maxLevels: 5 };
-        const SURFACE = { NONE: 0, NORMAL: 1, START: 2, GOAL: 3, ICE: 4, STICKY: 5, ENEMY: 6, ACID: 7, ELEVATED: 8 };
+        const SETTINGS = { marbleRadius: 0.5, cameraDistance: 15, timeLimit: 60, gravity: 0.015, iceMultiplier: 1.5, stickyMultiplier: 0.5, enemyStartLevel: 3 };
+        const SURFACE = { NONE: 0, NORMAL: 1, START: 2, GOAL: 3, ICE: 4, STICKY: 5, ENEMY: 6, ACID: 7, ELEVATED: 8, COIN: 9 };
 
         let renderer, scene, camera, marble, levelGroup, startTime, timeLeft;
         let gameState = GAME_STATE.MENU;
         let marbleVelocity = { x: 0, z: 0, y: 0 };
-        let enemies = [], isJumping = false, isFalling = false, currentLevel = 1, enemySpeed = 0.05;
+        let enemies = [], coins = [], isJumping = false, isFalling = false, currentLevel = 1, enemySpeed = 0.02;
         let cameraTargetPosition = new THREE.Vector3(), cameraSmoothing = 0.1;
         let joystickActive = false, joystickOrigin = { x: 0, y: 0 }, joystickVector = { x: 0, y: 0 }, currentPointerType = null;
+        let score = 0;
 
         const joystickBase = document.getElementById('joystick-base');
         const joystickKnob = document.getElementById('joystick-knob');
         const startScreen = document.getElementById('start-screen');
-        const endScreen = document.getElementById('end-screen');
-        const levelCompleteScreen = document.getElementById('level-complete-screen');
         const startButton = document.getElementById('start-button');
-        const restartButton = document.getElementById('restart-button');
-        const continueButton = document.getElementById('continue-button');
-        const endMessage = document.getElementById('end-message');
-        const levelCompleteMessage = document.getElementById('level-complete-message');
         const timeValue = document.getElementById('time-value');
-        const statusEl = document.getElementById('status');
+        const levelNumber = document.getElementById('level-number');
+        const scoreValue = document.getElementById('score-value');
 
         function init() {
             renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('game-canvas'), antialias: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.setClearColor(0x000000);
+            renderer.setClearColor(0x001122);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
             scene = new THREE.Scene();
             const aspect = window.innerWidth / window.innerHeight;
@@ -181,9 +274,12 @@
             camera.position.set(SETTINGS.cameraDistance, SETTINGS.cameraDistance, SETTINGS.cameraDistance);
             camera.lookAt(0, 0, 0);
 
-            scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+            scene.add(new THREE.AmbientLight(0x404080, 0.4));
             const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
             directionalLight.position.set(10, 20, 10);
+            directionalLight.castShadow = true;
+            directionalLight.shadow.mapSize.width = 2048;
+            directionalLight.shadow.mapSize.height = 2048;
             scene.add(directionalLight);
 
             setupEventListeners();
@@ -199,19 +295,20 @@
 
         function generateProceduralLevel(level) {
             const rng = new SeededRandom(level * 1000 + Math.floor(Math.random() * 1000));
-            const width = 10 + Math.min(6, Math.floor(level * 0.5));
-            const height = 15 + Math.min(8, Math.floor(level * 0.7));
+            const width = 10 + Math.min(8, Math.floor(level * 0.3));
+            const height = 15 + Math.min(10, Math.floor(level * 0.4));
             let grid = Array(height).fill().map(() => Array(width).fill(SURFACE.NONE));
 
             const params = {
-                ice: Math.min(0.02 + (level - 1) * 0.03, 0.20),
-                sticky: Math.min(0.02 + (level - 1) * 0.02, 0.15),
-                acid: level > 1 ? Math.min(0.01 + (level - 2) * 0.02, 0.12) : 0,
-                elevated: Math.min(0.02 + (level - 1) * 0.03, 0.18),
-                empty: Math.min(0.1 + (level - 1) * 0.02, 0.25),
-                enemies: level >= SETTINGS.enemyStartLevel ? Math.min(level - SETTINGS.enemyStartLevel + 1, 5) : 0,
-                pathTurns: 3 + Math.min(level, 7),
-                pathWidth: Math.max(2, 4 - Math.floor(level / 2))
+                ice: Math.min(0.02 + (level - 1) * 0.02, 0.15),
+                sticky: Math.min(0.02 + (level - 1) * 0.015, 0.12),
+                acid: level > 1 ? Math.min(0.01 + (level - 2) * 0.015, 0.10) : 0,
+                elevated: Math.min(0.02 + (level - 1) * 0.02, 0.15),
+                empty: Math.min(0.08 + (level - 1) * 0.015, 0.20),
+                coins: Math.min(0.03 + (level - 1) * 0.01, 0.08),
+                enemies: level >= SETTINGS.enemyStartLevel ? Math.min(level - SETTINGS.enemyStartLevel + 1, 8) : 0,
+                pathTurns: 3 + Math.min(level, 10),
+                pathWidth: Math.max(2, 5 - Math.floor(level / 3))
             };
 
             const startX = rng.randomInt(1, width - 2);
@@ -254,8 +351,42 @@
                         else if (roll < params.empty + params.ice + params.sticky) grid[y][x] = SURFACE.STICKY;
                         else if (roll < params.empty + params.ice + params.sticky + params.acid) grid[y][x] = SURFACE.ACID;
                         else if (roll < params.empty + params.ice + params.sticky + params.acid + params.elevated) grid[y][x] = SURFACE.ELEVATED;
+                        else if (roll < params.empty + params.ice + params.sticky + params.acid + params.elevated + params.coins) grid[y][x] = SURFACE.COIN;
                     }
                 }
+            }
+
+            // Place coins only on safe, reachable tiles
+            const safeTiles = [];
+            for (let y = 0; y < height; y++) {
+                for (let x = 0; x < width; x++) {
+                    const tileType = grid[y][x];
+                    if (tileType === SURFACE.NORMAL || tileType === SURFACE.ICE || 
+                        tileType === SURFACE.STICKY || tileType === SURFACE.ELEVATED) {
+                        const dist = Math.sqrt(Math.pow(x - startX, 2) + Math.pow(y - startY, 2));
+                        if (dist > 2) safeTiles.push({ x, y });
+                    }
+                }
+            }
+            
+            // Reset coin tiles and place them on safe tiles
+            for (let y = 0; y < height; y++) {
+                for (let x = 0; x < width; x++) {
+                    if (grid[y][x] === SURFACE.COIN) {
+                        grid[y][x] = SURFACE.NORMAL;
+                    }
+                }
+            }
+            
+            // Randomly place coins on safe tiles
+            const numCoins = Math.min(Math.floor(safeTiles.length * params.coins), safeTiles.length);
+            for (let i = safeTiles.length - 1; i > 0; i--) {
+                const j = Math.floor(rng.random() * (i + 1));
+                [safeTiles[i], safeTiles[j]] = [safeTiles[j], safeTiles[i]];
+            }
+            for (let i = 0; i < numCoins; i++) {
+                const tile = safeTiles[i];
+                grid[tile.y][tile.x] = SURFACE.COIN;
             }
 
             if (params.enemies > 0) {
@@ -343,22 +474,24 @@
             
             const materials = {
                 [SURFACE.NORMAL]: new THREE.MeshPhongMaterial({ color: 0x4682B4 }),
-                [SURFACE.START]: new THREE.MeshPhongMaterial({ color: 0x32CD32 }),
-                [SURFACE.GOAL]: new THREE.MeshPhongMaterial({ color: 0x32CD32 }),
-                [SURFACE.ICE]: new THREE.MeshPhongMaterial({ color: 0xADD8E6 }),
+                [SURFACE.START]: new THREE.MeshPhongMaterial({ color: 0x32CD32, emissive: 0x001100 }),
+                [SURFACE.GOAL]: new THREE.MeshPhongMaterial({ color: 0x32CD32, emissive: 0x001100 }),
+                [SURFACE.ICE]: new THREE.MeshPhongMaterial({ color: 0xADD8E6, transparent: true, opacity: 0.8 }),
                 [SURFACE.STICKY]: new THREE.MeshPhongMaterial({ color: 0x8B4513 }),
-                [SURFACE.ACID]: new THREE.MeshPhongMaterial({ color: 0xFF0000, transparent: true, opacity: 0.8 }),
-                [SURFACE.ELEVATED]: new THREE.MeshPhongMaterial({ color: 0x9370DB })
+                [SURFACE.ACID]: new THREE.MeshPhongMaterial({ color: 0xFF0000, transparent: true, opacity: 0.8, emissive: 0x330000 }),
+                [SURFACE.ELEVATED]: new THREE.MeshPhongMaterial({ color: 0x9370DB }),
+                [SURFACE.COIN]: new THREE.MeshPhongMaterial({ color: 0xFFD700, emissive: 0x332200 })
             };
 
             const levelWidth = levelDefinition[0].length, levelHeight = levelDefinition.length;
             const offsetX = -levelWidth / 2 + 0.5, offsetZ = -levelHeight / 2 + 0.5;
             enemies = [];
+            coins = [];
 
             for (let z = 0; z < levelHeight; z++) {
                 for (let x = 0; x < levelWidth; x++) {
                     const tileType = levelDefinition[z][x];
-                    if (tileType > 0) {
+                    if (tileType > 0 && tileType !== SURFACE.ENEMY && tileType !== SURFACE.COIN) {
                         let tileHeight = 0.5, tileY = -tileHeight / 2;
                         if (tileType === SURFACE.ELEVATED) {
                             tileHeight = 0.8;
@@ -368,35 +501,74 @@
                         const tile = new THREE.Mesh(new THREE.BoxGeometry(1, tileHeight, 1), materials[tileType] || materials[SURFACE.NORMAL]);
                         tile.position.set(x + offsetX, tileY, z + offsetZ);
                         tile.userData = { type: tileType };
+                        tile.castShadow = true;
+                        tile.receiveShadow = true;
                         levelGroup.add(tile);
 
                         if (tileType === SURFACE.START) {
                             marble.position.set(x + offsetX, SETTINGS.marbleRadius, z + offsetZ);
                         }
-                        if (tileType === SURFACE.ENEMY && currentLevel >= SETTINGS.enemyStartLevel) {
-                            createEnemy(x + offsetX, z + offsetZ);
-                        }
                         if (tileType === SURFACE.ACID) {
                             tile.userData.animOffset = Math.random() * Math.PI * 2;
                         }
                     }
+                    
+                    if (tileType === SURFACE.ENEMY && currentLevel >= SETTINGS.enemyStartLevel) {
+                        createEnemy(x + offsetX, z + offsetZ);
+                    }
+                    
+                    if (tileType === SURFACE.COIN) {
+                        createCoin(x + offsetX, z + offsetZ);
+                    }
                 }
             }
+            
+            levelNumber.textContent = currentLevel;
+        }
+
+        function createSlinky(segments = 8) {
+            const slinkyGroup = new THREE.Group();
+            const segmentGeometry = new THREE.TorusGeometry(0.2, 0.05, 8, 16);
+            const segmentMaterial = new THREE.MeshPhongMaterial({ color: 0xFF4444, emissive: 0x220000 });
+            
+            for (let i = 0; i < segments; i++) {
+                const segment = new THREE.Mesh(segmentGeometry, segmentMaterial);
+                segment.position.y = i * 0.1;
+                segment.castShadow = true;
+                slinkyGroup.add(segment);
+            }
+            
+            return slinkyGroup;
         }
 
         function createEnemy(x, z) {
-            const enemy = new THREE.Mesh(new THREE.SphereGeometry(0.4, 16, 16), new THREE.MeshPhongMaterial({ color: 0xFF0000 }));
-            enemy.position.set(x, 0.4, z);
-            enemy.userData = {
+            const slinky = createSlinky();
+            slinky.position.set(x, 0.4, z);
+            slinky.userData = {
                 direction: new THREE.Vector2(Math.random() - 0.5, Math.random() - 0.5).normalize(),
-                timeSinceDirectionChange: 0
+                timeSinceDirectionChange: 0,
+                animationTime: 0
             };
-            levelGroup.add(enemy);
-            enemies.push(enemy);
+            levelGroup.add(slinky);
+            enemies.push(slinky);
+        }
+
+        function createCoin(x, z) {
+            const coinGeometry = new THREE.CylinderGeometry(0.3, 0.3, 0.1, 16);
+            const coinMaterial = new THREE.MeshPhongMaterial({ color: 0xFFD700, emissive: 0x332200 });
+            const coin = new THREE.Mesh(coinGeometry, coinMaterial);
+            coin.position.set(x, 0.5, z);
+            coin.rotation.z = Math.PI / 2; // Rotate to spin vertically
+            coin.userData = { type: SURFACE.COIN, collected: false };
+            coin.castShadow = true;
+            levelGroup.add(coin);
+            coins.push(coin);
         }
 
         function createMarble() {
             marble = new THREE.Mesh(new THREE.SphereGeometry(SETTINGS.marbleRadius, 32, 32), new THREE.MeshPhongMaterial({ color: 0xFFFFFF, specular: 0x111111, shininess: 100 }));
+            marble.castShadow = true;
+            marble.receiveShadow = true;
             scene.add(marble);
             marbleVelocity = { x: 0, y: 0, z: 0 };
             isJumping = false;
@@ -420,7 +592,7 @@
         function moveJoystick(x, y, pointerType) {
             if (!joystickActive || currentPointerType !== pointerType) return;
             const dx = x - joystickOrigin.x, dy = y - joystickOrigin.y;
-            const dist = Math.sqrt(dx * dx + dy * dy), maxDist = 40;
+            const dist = Math.sqrt(dx * dx + dy * dy), maxDist = 50;
             const clampedDist = Math.min(maxDist, dist), angle = Math.atan2(dy, dx);
             joystickVector.x = Math.cos(angle) * (clampedDist / maxDist);
             joystickVector.y = Math.sin(angle) * (clampedDist / maxDist);
@@ -445,8 +617,8 @@
         }
 
         function updateJoystickPosition(dx, dy) {
-            joystickKnob.style.left = `${50 + dx}px`;
-            joystickKnob.style.top = `${50 + dy}px`;
+            joystickKnob.style.left = `${60 + dx}px`;
+            joystickKnob.style.top = `${60 + dy}px`;
         }
 
         function setupEventListeners() {
@@ -489,8 +661,6 @@
 
             window.addEventListener('resize', onWindowResize);
             startButton.addEventListener('click', startGame);
-            restartButton.addEventListener('click', restartCurrentLevel);
-            continueButton.addEventListener('click', proceedToNextLevel);
         }
 
         function onWindowResize() {
@@ -507,9 +677,8 @@
         function startGame() {
             gameState = GAME_STATE.PLAYING;
             currentLevel = 1;
+            score = 0;
             startScreen.style.display = 'none';
-            endScreen.style.display = 'none';
-            levelCompleteScreen.style.display = 'none';
             startTime = Date.now();
             timeLeft = SETTINGS.timeLimit;
             
@@ -519,50 +688,11 @@
             createMarble();
             createLevel();
             resetJoystick();
-            showStatus('Level ' + currentLevel + ' - Go!');
-        }
-
-        function restartCurrentLevel() {
-            gameState = GAME_STATE.PLAYING;
-            endScreen.style.display = 'none';
-            levelCompleteScreen.style.display = 'none';
-            
-            if (levelGroup) scene.remove(levelGroup);
-            marbleVelocity = { x: 0, y: 0, z: 0 };
-            isJumping = false;
-            isFalling = false;
-            
-            if (marble) {
-                marble.visible = true;
-                scene.add(marble);
-            } else {
-                createMarble();
-            }
-            
-            createLevel();
-            resetJoystick();
-            showStatus('Try again!');
-        }
-
-        function showLevelComplete() {
-            gameState = GAME_STATE.MENU;
-            resetJoystick();
-            levelCompleteMessage.textContent = `Level ${currentLevel} Completed!`;
-            levelCompleteScreen.style.display = 'flex';
-        }
-
-        function proceedToNextLevel() {
-            levelCompleteScreen.style.display = 'none';
-            nextLevel();
+            updateScore();
         }
 
         function nextLevel() {
             currentLevel++;
-            if (currentLevel > SETTINGS.maxLevels) {
-                endGame(true);
-                return;
-            }
-            
             gameState = GAME_STATE.PLAYING;
             
             if (levelGroup) scene.remove(levelGroup);
@@ -578,17 +708,29 @@
             }
             
             createLevel();
-            timeLeft += 30;
+            timeLeft += 30; // Bonus time for completing level
             startTime = Date.now() - (SETTINGS.timeLimit - timeLeft) * 1000;
             resetJoystick();
-            showStatus('Level ' + currentLevel + ' - Go!');
         }
 
-        function endGame(isVictory) {
-            gameState = isVictory ? GAME_STATE.WIN : GAME_STATE.GAME_OVER;
+        function gameOver() {
+            gameState = GAME_STATE.GAME_OVER;
             resetJoystick();
-            endScreen.style.display = 'flex';
-            endMessage.textContent = isVictory ? 'Victory!' : 'Try Again!';
+            
+            // Reset to start screen after a delay
+            setTimeout(() => {
+                startScreen.style.display = 'flex';
+                gameState = GAME_STATE.MENU;
+            }, 2000);
+        }
+
+        function updateScore() {
+            scoreValue.textContent = score;
+        }
+
+        function addScore(points) {
+            score += points;
+            updateScore();
         }
 
         function updateTimer() {
@@ -597,14 +739,20 @@
                 const elapsedSeconds = Math.floor((currentTime - startTime) / 1000);
                 timeLeft = Math.max(0, SETTINGS.timeLimit + 30 * (currentLevel - 1) - elapsedSeconds);
                 timeValue.textContent = timeLeft;
-                if (timeLeft <= 0) endGame(false);
+                
+                // Visual warning when time is low
+                if (timeLeft <= 10) {
+                    timeValue.style.color = '#ff4444';
+                    timeValue.style.fontWeight = 'bold';
+                } else if (timeLeft <= 30) {
+                    timeValue.style.color = '#ffaa00';
+                } else {
+                    timeValue.style.color = 'white';
+                    timeValue.style.fontWeight = 'normal';
+                }
+                
+                if (timeLeft <= 0) gameOver();
             }
-        }
-
-        function showStatus(message) {
-            statusEl.textContent = message;
-            statusEl.style.opacity = 1;
-            setTimeout(() => { statusEl.style.opacity = 0; }, 2000);
         }
 
         function getMarbleSurface() {
@@ -623,23 +771,59 @@
         function isMarbleTouchingEnemy() {
             for (const enemy of enemies) {
                 const distance = marble.position.distanceTo(enemy.position);
-                if (distance < SETTINGS.marbleRadius + 0.4) return true;
+                if (distance < SETTINGS.marbleRadius + 0.6) return true;
             }
             return false;
         }
 
+        function checkCoinCollisions() {
+            for (const coin of coins) {
+                if (!coin.userData.collected) {
+                    const distance = marble.position.distanceTo(coin.position);
+                    if (distance < SETTINGS.marbleRadius + 0.3) {
+                        coin.userData.collected = true;
+                        coin.visible = false;
+                        addScore(100);
+                    }
+                }
+            }
+        }
+
         function updateEnemies() {
             for (const enemy of enemies) {
+                enemy.userData.animationTime += 0.02;
+                
+                // Animate slinky segments
+                enemy.children.forEach((segment, index) => {
+                    segment.rotation.y = enemy.userData.animationTime + index * 0.3;
+                    segment.position.y = 0.1 + index * 0.08 + Math.sin(enemy.userData.animationTime * 2 + index * 0.5) * 0.02;
+                });
+                
+                // Move enemy
                 enemy.position.x += enemy.userData.direction.x * enemySpeed;
                 enemy.position.z += enemy.userData.direction.y * enemySpeed;
                 enemy.userData.timeSinceDirectionChange += 1 / 60;
                 
-                const raycaster = new THREE.Raycaster(enemy.position.clone(), new THREE.Vector3(enemy.userData.direction.x, 0, enemy.userData.direction.y).normalize());
+                // Check for direction change
+                const raycaster = new THREE.Raycaster(
+                    enemy.position.clone(), 
+                    new THREE.Vector3(enemy.userData.direction.x, 0, enemy.userData.direction.y).normalize()
+                );
                 const intersects = raycaster.intersectObjects(levelGroup.children);
                 
-                if (intersects.length > 0 && intersects[0].distance < 0.5 || enemy.userData.timeSinceDirectionChange > 3) {
+                if (intersects.length > 0 && intersects[0].distance < 0.8 || enemy.userData.timeSinceDirectionChange > 4) {
                     enemy.userData.direction = new THREE.Vector2(Math.random() - 0.5, Math.random() - 0.5).normalize();
                     enemy.userData.timeSinceDirectionChange = 0;
+                }
+            }
+        }
+
+        function updateCoins() {
+            const time = Date.now() * 0.002;
+            for (const coin of coins) {
+                if (!coin.userData.collected) {
+                    coin.rotation.x = time; // Spin vertically around x-axis
+                    coin.position.y = 0.5 + Math.sin(time * 2) * 0.1;
                 }
             }
         }
@@ -695,34 +879,42 @@
                 marble.position.y += marbleVelocity.y;
 
                 if (marble.position.y < -5) {
-                    showStatus('Fell off the level!');
-                    endGame(false);
+                    disintegrateMarble();
                     return;
                 }
 
                 if (isMarbleAtGoal()) {
-                    showLevelComplete();
+                    addScore(currentLevel * 50); // Bonus points for completing level
+                    nextLevel();
                 }
 
                 if (isMarbleTouchingEnemy()) {
-                    showStatus('Hit by an enemy!');
-                    endGame(false);
+                    disintegrateMarble();
+                    return;
                 }
+
+                checkCoinCollisions();
             }
         }
 
         function disintegrateMarble() {
-            showStatus('Melted in acid!');
             gameState = GAME_STATE.GAME_OVER;
             
             const particleCount = 20;
             const particles = [];
             
             for (let i = 0; i < particleCount; i++) {
-                const particle = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 8), new THREE.MeshBasicMaterial({ color: 0xFFFFFF, transparent: true, opacity: 0.8 }));
+                const particle = new THREE.Mesh(
+                    new THREE.SphereGeometry(0.05, 8, 8), 
+                    new THREE.MeshBasicMaterial({ color: 0xFFFFFF, transparent: true, opacity: 0.8 })
+                );
                 particle.position.copy(marble.position);
                 particle.userData = {
-                    velocity: new THREE.Vector3((Math.random() - 0.5) * 0.2, Math.random() * 0.1, (Math.random() - 0.5) * 0.2),
+                    velocity: new THREE.Vector3(
+                        (Math.random() - 0.5) * 0.2, 
+                        Math.random() * 0.1, 
+                        (Math.random() - 0.5) * 0.2
+                    ),
                     life: 1.0,
                     decay: 0.02
                 };
@@ -752,9 +944,11 @@
                 } else {
                     particles.forEach(particle => scene.remove(particle));
                     if (gameState === GAME_STATE.GAME_OVER) {
-                        endScreen.style.display = 'flex';
-                        endMessage.textContent = 'Try Again!';
                         resetJoystick();
+                        setTimeout(() => {
+                            startScreen.style.display = 'flex';
+                            gameState = GAME_STATE.MENU;
+                        }, 1000);
                     }
                 }
             };
@@ -769,6 +963,10 @@
                         const time = Date.now() * 0.001;
                         const offset = child.userData.animOffset || 0;
                         child.position.y = -0.25 + Math.sin(time + offset) * 0.05;
+                        
+                        // Animate acid glow
+                        const glowIntensity = 0.3 + Math.sin(time * 2 + offset) * 0.2;
+                        child.material.emissive.setRGB(glowIntensity, 0, 0);
                     }
                 });
             }
@@ -791,6 +989,7 @@
             if (gameState === GAME_STATE.PLAYING) {
                 updateMarblePhysics();
                 updateEnemies();
+                updateCoins();
                 updateAcidAnimation();
                 updateTimer();
                 updateCamera();
