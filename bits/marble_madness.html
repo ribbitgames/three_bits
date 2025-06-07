@@ -1168,6 +1168,11 @@
         function disintegrateMarble() {
             gameState = GAME_STATE.GAME_OVER;
             
+            // Lose 50 points on death, but don't go below 0
+            score = Math.max(0, score - 50);
+            updateScore();
+            flashScore();
+            
             const particleCount = 20;
             const particles = [];
             
