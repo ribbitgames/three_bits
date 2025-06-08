@@ -365,6 +365,10 @@
             document.addEventListener('mousemove', onMouseMove);
             document.addEventListener('mouseup', onMouseUp);
             startButton.addEventListener('click', startGame);
+            startButton.addEventListener('touchstart', (event) => {
+                event.preventDefault();
+                startGame();
+            });
 
             currentMazeData = null;
             completedLevels = 0;
