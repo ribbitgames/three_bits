@@ -249,6 +249,7 @@
         let joystickActive = false;
         let joystickDirection = { x: 0, z: 0 };
         let joystickBase = { x: 0, y: 0 };
+        let activeParticleEffects = [];
 
         const levelNumber = document.getElementById('level-number');
         const timeCounter = document.getElementById('time-counter');
@@ -595,20 +596,28 @@
         }
 
         function startLevel(level, regenerateMaze = true) {
+            // Clean up any remaining particle effects
+            clearAllParticleEffects();
+
             currentLevel = level;
             levelNumber.textContent = level;
             gameMessage.textContent = '';
             gameMessage.style.display = 'none';
+
             mazeWidth = 5 + (level * 2);
             mazeHeight = 5 + (level * 2);
+
             if (regenerateMaze || currentMazeData === null) {
                 currentMazeData = generateMaze(mazeWidth, mazeHeight);
             }
+
             buildMaze(currentMazeData);
+
             isGameRunning = true;
             isLevelComplete = false;
             isDead = false;
             startTime = Date.now();
+
             camera.position.x = player.position.x;
             camera.position.z = player.position.z;
             const ambientLights = scene.children.filter(child => child instanceof THREE.AmbientLight);
@@ -687,6 +696,7 @@
             const completionGeometry = new THREE.BufferGeometry();
             const completionParticles = new Float32Array(particleCount * 3);
             const completionColors = new Float32Array(particleCount * 3);
+
             for (let i = 0; i < particleCount; i++) {
                 const angle = (i / particleCount) * Math.PI * 2;
                 const radius = 1.5;
@@ -698,8 +708,10 @@
                 completionColors[i3 + 1] = 0.8 + Math.random() * 0.2;
                 completionColors[i3 + 2] = 0.0;
             }
+
             completionGeometry.setAttribute('position', new THREE.BufferAttribute(completionParticles, 3));
             completionGeometry.setAttribute('color', new THREE.BufferAttribute(completionColors, 3));
+
             const completionMaterial = new THREE.PointsMaterial({
                 size: 0.1,
                 vertexColors: true,
@@ -707,18 +719,31 @@
                 transparent: true,
                 depthWrite: false
             });
+
             const completionEffect = new THREE.Points(completionGeometry, completionMaterial);
             completionEffect.position.copy(player.position);
             scene.add(completionEffect);
+
+            // Track the effect
+            activeParticleEffects.push(completionEffect);
+
             const effectDuration = 2.0;
             const startTime = Date.now();
+
             function animateCompletionEffect() {
                 const elapsed = (Date.now() - startTime) / 1000;
                 const progress = elapsed / effectDuration;
+
                 if (progress >= 1.0) {
                     scene.remove(completionEffect);
+                    // Remove from tracking array
+                    const index = activeParticleEffects.indexOf(completionEffect);
+                    if (index > -1) {
+                        activeParticleEffects.splice(index, 1);
+                    }
                     return;
                 }
+
                 const positions = completionEffect.geometry.attributes.position.array;
                 for (let i = 0; i < particleCount; i++) {
                     const i3 = i * 3;
@@ -728,10 +753,12 @@
                     positions[i3 + 1] = 0.2 + progress * 3;
                     positions[i3 + 2] = Math.sin(angle) * radius;
                 }
+
                 completionEffect.geometry.attributes.position.needsUpdate = true;
                 completionMaterial.opacity = 1.0 - progress;
                 requestAnimationFrame(animateCompletionEffect);
             }
+
             animateCompletionEffect();
         }
 
@@ -807,6 +834,7 @@
             const explosionParticles = new Float32Array(particleCount * 3);
             const explosionColors = new Float32Array(particleCount * 3);
             const explosionSizes = new Float32Array(particleCount);
+
             for (let i = 0; i < particleCount; i++) {
                 const i3 = i * 3;
                 explosionParticles[i3] = 0;
@@ -817,9 +845,11 @@
                 explosionColors[i3 + 2] = 0;
                 explosionSizes[i] = Math.random() * 0.05 + 0.05;
             }
+
             explosionGeometry.setAttribute('position', new THREE.BufferAttribute(explosionParticles, 3));
             explosionGeometry.setAttribute('color', new THREE.BufferAttribute(explosionColors, 3));
             explosionGeometry.setAttribute('size', new THREE.BufferAttribute(explosionSizes, 1));
+
             const explosionMaterial = new THREE.PointsMaterial({
                 size: 0.1,
                 vertexColors: true,
@@ -827,18 +857,31 @@
                 transparent: true,
                 depthWrite: false
             });
+
             const explosion = new THREE.Points(explosionGeometry, explosionMaterial);
             explosion.position.set(x, PLAYER_RADIUS, z);
             scene.add(explosion);
+
+            // Track the effect
+            activeParticleEffects.push(explosion);
+
             const explosionDuration = 1.0;
             const startTime = Date.now();
+
             function animateExplosion() {
                 const elapsed = (Date.now() - startTime) / 1000;
                 const progress = elapsed / explosionDuration;
+
                 if (progress >= 1.0) {
                     scene.remove(explosion);
+                    // Remove from tracking array
+                    const index = activeParticleEffects.indexOf(explosion);
+                    if (index > -1) {
+                        activeParticleEffects.splice(index, 1);
+                    }
                     return;
                 }
+
                 const positions = explosion.geometry.attributes.position.array;
                 for (let i = 0; i < particleCount; i++) {
                     const i3 = i * 3;
@@ -848,11 +891,23 @@
                     positions[i3 + 1] = progress * 2.0;
                     positions[i3 + 2] = Math.sin(angle) * radius * Math.random();
                 }
+
                 explosion.geometry.attributes.position.needsUpdate = true;
                 explosionMaterial.opacity = 1.0 - progress;
                 requestAnimationFrame(animateExplosion);
             }
+
             animateExplosion();
+        }
+
+        function clearAllParticleEffects() {
+            // Remove all tracked particle effects from the scene
+            activeParticleEffects.forEach(effect => {
+                scene.remove(effect);
+            });
+
+            // Clear the tracking array
+            activeParticleEffects = [];
         }
 
         function onWindowResize() {
