@@ -55,9 +55,33 @@
             border-radius: 5px;
         }
 
-        #score, #lives {
+        #score, #lives, #level {
             font-size: 16px;
             text-shadow: 1px 1px 2px #000;
+        }
+
+        #boss-health-container {
+            position: absolute;
+            top: 50px;
+            width: 100%;
+            text-align: center;
+            display: none;
+        }
+
+        #boss-health-bar {
+            width: 200px;
+            height: 20px;
+            background-color: #333;
+            border: 2px solid #fff;
+            margin: 0 auto;
+            overflow: hidden;
+        }
+
+        #boss-health {
+            height: 100%;
+            background-color: #ff0000;
+            width: 100%;
+            transition: width 0.2s;
         }
 
         #control-container {
@@ -106,16 +130,25 @@
                 padding: 5px;
             }
             
-            #score, #lives {
+            #score, #lives, #level {
                 font-size: 14px;
+            }
+
+            #boss-health-bar {
+                width: 150px;
+                height: 15px;
             }
         }
 
         @media (min-width: 768px) {
             #top-ui {
                 width: auto;
-                max-width: 300px;
+                max-width: 400px;
                 margin: 0 auto;
+            }
+
+            #boss-health-bar {
+                width: 300px;
             }
         }
     </style>
@@ -126,7 +159,13 @@
         <div id="ui-container">
             <div id="top-ui">
                 <div id="score">Score: 0</div>
+                <div id="level">Level: 1</div>
                 <div id="lives">Lives: 3</div>
+            </div>
+            <div id="boss-health-container">
+                <div id="boss-health-bar">
+                    <div id="boss-health"></div>
+                </div>
             </div>
             <div id="control-container">
             </div>
@@ -147,6 +186,7 @@
         /**
          * Space Shooter using Three.js
          * Optimized for vertical phone screens, with touch/mouse controls
+         * Includes boss fights with varied shapes, despawned enemies, and adjusted scoring
          */
 
         // Game state and constants
@@ -180,7 +220,7 @@
         let lastTime = 0;
         let score = 0;
         let lives = CONFIG.maxPlayerLives;
-        let player, playerLight;
+        let player, playerLight, boss;
         let playerPowerUps = {
             speed: 0,
             missile: false,
@@ -188,6 +228,20 @@
             laser: false,
             shield: false
         };
+        let bossActive = false;
+        let nextBossScore = 3000; // Increased initial boss spawn
+        let level = 1;
+        let bossMaxHealth = 0;
+        let bossShapeIndex = 0;
+
+        // Boss shapes array
+        const bossShapes = [
+            new THREE.OctahedronGeometry(0.8),
+            new THREE.BoxGeometry(1, 1, 1),
+            new THREE.SphereGeometry(0.8, 16, 16),
+            new THREE.TetrahedronGeometry(1),
+            new THREE.TorusGeometry(0.6, 0.2, 16, 32)
+        ];
 
         // Game object collections
         let bullets = [];
@@ -216,7 +270,6 @@
         document.addEventListener('DOMContentLoaded', () => {
             console.log("Document loaded");
 
-            // Set up button handlers
             const startButton = document.getElementById('start-button');
             if (startButton) {
                 startButton.addEventListener('click', () => {
@@ -234,48 +287,35 @@
                 });
             }
 
-            // Initialize game only once
             if (!gameInitialized) {
                 init();
                 gameInitialized = true;
             }
         });
 
-        /**
-         * Initializes the game, sets up Three.js scene
-         */
         function init() {
-            // Get screen dimensions
             updateScreenDimensions();
 
-            // Create scene
             scene = new THREE.Scene();
             scene.background = new THREE.Color(0x000025);
 
-            // Setup camera for vertical orientation
             setupCamera();
 
-            // Create renderer
             renderer = new THREE.WebGLRenderer({ antialias: true });
             renderer.setSize(screenWidth, screenHeight);
             document.getElementById('game-canvas').appendChild(renderer.domElement);
 
-            // Add ambient light
             const ambientLight = new THREE.AmbientLight(0x333333);
             scene.add(ambientLight);
 
-            // Add distant directional light
             const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
             dirLight.position.set(0, 0, 5);
             scene.add(dirLight);
 
-            // Create raycaster for input handling
             raycaster = new THREE.Raycaster();
 
-            // Setup event listeners
             window.addEventListener('resize', onWindowResize);
 
-            // Touch and mouse events for mobile-friendly controls
             renderer.domElement.addEventListener('mousedown', onPointerDown);
             renderer.domElement.addEventListener('touchstart', onPointerDown, { passive: false });
 
@@ -288,39 +328,26 @@
             renderer.domElement.addEventListener('mouseleave', onPointerUp);
             renderer.domElement.addEventListener('touchcancel', onPointerUp);
 
-            // Create player spaceship
             createPlayer();
-
-            // Add background stars
             createStarfield();
 
-            // Show start screen
             document.getElementById('start-screen').classList.remove('hidden');
             document.getElementById('game-over-screen').classList.add('hidden');
 
-            // Update UI
             updateScoreDisplay();
+            updateLevelDisplay();
             updateLivesDisplay();
 
-            // Start animation loop
             animate(0);
         }
 
-        /**
-         * Get screen dimensions and calculate scaling factors
-         */
         function updateScreenDimensions() {
             screenWidth = window.innerWidth;
             screenHeight = window.innerHeight;
             aspectRatio = screenHeight / screenWidth;
-
-            // Calculate game scale based on screen size
             gameScale = screenWidth < 480 ? 0.8 : 1;
         }
 
-        /**
-         * Sets up the camera based on screen dimensions
-         */
         function setupCamera() {
             const frustumSize = 10;
             camera = new THREE.OrthographicCamera(
@@ -334,9 +361,6 @@
             camera.position.z = 10;
         }
 
-        /**
-         * Creates the player ship with lights and effects
-         */
         function createPlayer() {
             const shipGroup = new THREE.Group();
 
@@ -421,9 +445,6 @@
             player.add(player.shield);
         }
 
-        /**
-         * Creates a starfield background using particle system
-         */
         function createStarfield() {
             const layerCount = 3;
             const starCounts = [100, 80, 60];
@@ -459,9 +480,6 @@
             }
         }
 
-        /**
-         * Window resize handler
-         */
         function onWindowResize() {
             updateScreenDimensions();
             const frustumSize = 10;
@@ -473,9 +491,6 @@
             renderer.setSize(screenWidth, screenHeight);
         }
 
-        /**
-         * Pointer down event handler (both mouse and touch)
-         */
         function onPointerDown(event) {
             event.preventDefault();
             if (gameState === GAME_STATE.PLAYING) {
@@ -485,18 +500,12 @@
             }
         }
 
-        /**
-         * Pointer move event handler (both mouse and touch)
-         */
         function onPointerMove(event) {
             event.preventDefault();
             if (gameState !== GAME_STATE.PLAYING || !isPointerDown) return;
             updatePlayerTarget(event);
         }
 
-        /**
-         * Pointer up event handler (both mouse and touch)
-         */
         function onPointerUp(event) {
             if (event.preventDefault) {
                 event.preventDefault();
@@ -504,9 +513,6 @@
             isPointerDown = false;
         }
 
-        /**
-         * Update player target position from pointer event
-         */
         function updatePlayerTarget(event) {
             const pointer = {};
             if (event.type.startsWith('touch')) {
@@ -521,9 +527,6 @@
             player.targetX = vector.x;
         }
 
-        /**
-         * Starts the game
-         */
         function startGame() {
             console.log("startGame called, changing state to PLAYING");
             gameState = GAME_STATE.PLAYING;
@@ -536,25 +539,26 @@
                 laser: false,
                 shield: false
             };
+            bossActive = false;
+            nextBossScore = 3000;
+            level = 1;
+            bossShapeIndex = 0;
             clearGameObjects();
             player.position.set(0, -6, 0);
             player.shield.visible = false;
             updateScoreDisplay();
+            updateLevelDisplay();
             updateLivesDisplay();
             document.getElementById('start-screen').classList.add('hidden');
+            document.getElementById('boss-health-container').style.display = 'none';
         }
 
-        /**
-         * Resets the game after game over
-         */
         function resetGame() {
             document.getElementById('game-over-screen').classList.add('hidden');
+            document.getElementById('boss-health-container').style.display = 'none';
             startGame();
         }
 
-        /**
-         * Clears all game objects for reset
-         */
         function clearGameObjects() {
             bullets.forEach(bullet => scene.remove(bullet));
             bullets = [];
@@ -568,34 +572,41 @@
             obstacles = [];
             enemyProjectiles.forEach(projectile => scene.remove(projectile));
             enemyProjectiles = [];
+            if (bossActive && boss) {
+                scene.remove(boss);
+                bossActive = false;
+            }
         }
 
-        /**
-         * Game over handler
-         */
         function gameOver() {
             gameState = GAME_STATE.GAME_OVER;
             document.getElementById('final-score').textContent = score;
             document.getElementById('game-over-screen').classList.remove('hidden');
+            document.getElementById('boss-health-container').style.display = 'none';
         }
 
-        /**
-         * Update score display
-         */
         function updateScoreDisplay() {
             document.getElementById('score').textContent = `Score: ${score}`;
         }
 
-        /**
-         * Update lives display
-         */
+        function updateLevelDisplay() {
+            document.getElementById('level').textContent = `Level: ${level}`;
+        }
+
         function updateLivesDisplay() {
             document.getElementById('lives').textContent = `Lives: ${lives}`;
         }
 
-        /**
-         * Creates an enemy at a random position off-screen at the top
-         */
+        function updateBossHealthBar() {
+            if (bossActive && boss) {
+                const healthPercentage = (boss.health / bossMaxHealth) * 100;
+                document.getElementById('boss-health').style.width = `${healthPercentage}%`;
+                document.getElementById('boss-health-container').style.display = 'block';
+            } else {
+                document.getElementById('boss-health-container').style.display = 'none';
+            }
+        }
+
         function spawnEnemy() {
             const isSpecialEnemy = Math.random() < CONFIG.specialEnemyChance;
             const enemyTypes = isSpecialEnemy ? [
@@ -651,7 +662,7 @@
             );
             enemy.health = enemyType.health;
             enemy.score = enemyType.score;
-            enemy.speed = CONFIG.enemySpeed;
+            enemy.speed = CONFIG.enemySpeed * (1 + level * 0.1);
             enemy.isSpecial = enemyType.isSpecial;
             enemy.canShoot = enemyType.canShoot;
             enemy.lastShotTime = 0;
@@ -659,9 +670,27 @@
             enemies.push(enemy);
         }
 
-        /**
-         * Spawn an indestructible obstacle
-         */
+        function spawnBoss() {
+            // Despawn existing enemies
+            enemies.forEach(enemy => scene.remove(enemy));
+            enemies = [];
+
+            const bossGeometry = bossShapes[bossShapeIndex];
+            const bossMaterial = new THREE.MeshPhongMaterial({ color: 0xff0000, emissive: 0x550000 });
+            boss = new THREE.Mesh(bossGeometry, bossMaterial);
+            boss.position.set(0, 5, 0);
+            bossMaxHealth = 50 * level;
+            boss.health = bossMaxHealth;
+            boss.score = 500 * level;
+            boss.speed = 0.02;
+            boss.lastShotTime = 0;
+            boss.attackInterval = 2000 / level;
+            scene.add(boss);
+            bossActive = true;
+            updateBossHealthBar();
+            bossShapeIndex = (bossShapeIndex + 1) % bossShapes.length; // Cycle shapes
+        }
+
         function spawnObstacle() {
             const isRectangle = Math.random() < 0.5;
             const obstacleGeometry = isRectangle
@@ -683,12 +712,9 @@
             obstacles.push(obstacle);
         }
 
-        /**
-         * Fire player weapon based on current power-ups
-         */
         function firePlayerWeapon() {
             const bulletGeometry = new THREE.SphereGeometry(0.1, 8, 8);
-            const bulletColor = playerPowerUps.laser ? 0xff00ff : 0x00ffff; // Magenta for laser, cyan for normal
+            const bulletColor = playerPowerUps.laser ? 0xff00ff : 0x00ffff;
             const bulletMaterial = new THREE.MeshBasicMaterial({ color: bulletColor });
 
             function createBullet(offsetX = 0) {
@@ -720,9 +746,6 @@
             }
         }
 
-        /**
-         * Fire enemy projectile
-         */
         function fireEnemyProjectile(enemy) {
             const projectileGeometry = new THREE.SphereGeometry(0.08, 8, 8);
             const projectileMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
@@ -734,9 +757,21 @@
             enemy.lastShotTime = performance.now();
         }
 
-        /**
-         * Collect power-up and apply effect
-         */
+        function fireBossProjectiles() {
+            const angles = [-15, 0, 15];
+            angles.forEach(angle => {
+                const rad = angle * Math.PI / 180;
+                const projectile = new THREE.Mesh(new THREE.SphereGeometry(0.1), new THREE.MeshBasicMaterial({ color: 0xff0000 }));
+                projectile.position.copy(boss.position);
+                projectile.velocity = {
+                    x: Math.sin(rad) * CONFIG.enemyProjectileSpeed,
+                    y: -Math.cos(rad) * CONFIG.enemyProjectileSpeed
+                };
+                scene.add(projectile);
+                enemyProjectiles.push(projectile);
+            });
+        }
+
         function collectPowerUp(powerUp) {
             let powerTypes = ['speed', 'double', 'laser', 'shield'];
             if (score >= CONFIG.missileMinScore) {
@@ -748,9 +783,6 @@
             powerUps.splice(powerUps.indexOf(powerUp), 1);
         }
 
-        /**
-         * Apply power-up effect
-         */
         function applyPowerUp(powerType) {
             switch (powerType) {
                 case 'speed':
@@ -772,9 +804,6 @@
             }
         }
 
-        /**
-         * Create explosion effect at position
-         */
         function createExplosion(position, size = 1, color = 0xffaa00) {
             const particleCount = 10;
             const explosionGeometry = new THREE.BufferGeometry();
@@ -802,11 +831,17 @@
             explosions.push(explosion);
         }
 
-        /**
-         * Check collisions between game objects
-         */
+        function updateBoss(delta, time) {
+            boss.position.x = 3 * Math.sin(time * 0.001);
+            boss.position.y = 5; // Stay at top
+            boss.rotation.y += delta * 0.5;
+            if (time - boss.lastShotTime > boss.attackInterval) {
+                fireBossProjectiles();
+                boss.lastShotTime = time;
+            }
+        }
+
         function checkCollisions() {
-            // Bullet-enemy collisions
             for (let i = bullets.length - 1; i >= 0; i--) {
                 const bullet = bullets[i];
                 for (let j = enemies.length - 1; j >= 0; j--) {
@@ -832,9 +867,58 @@
                 }
             }
 
+            if (bossActive) {
+                for (let i = bullets.length - 1; i >= 0; i--) {
+                    const bullet = bullets[i];
+                    const distance = bullet.position.distanceTo(boss.position);
+                    if (distance < 0.8) {
+                        boss.health -= bullet.power;
+                        scene.remove(bullet);
+                        bullets.splice(i, 1);
+                        createExplosion(bullet.position, 0.7, 0xffff00); // Yellow hit effect
+                        updateBossHealthBar();
+                        if (boss.health <= 0) {
+                            score += boss.score;
+                            updateScoreDisplay();
+                            createExplosion(boss.position, 2, 0xff0000);
+                            scene.remove(boss);
+                            bossActive = false;
+                            level++;
+                            nextBossScore = score + 3000; // Increased interval
+                            updateLevelDisplay();
+                            updateBossHealthBar();
+                            if (Math.random() < 0.5) {
+                                createPowerUp(boss.position);
+                            }
+                        }
+                        break;
+                    }
+                }
+                const playerBossDistance = player.position.distanceTo(boss.position);
+                if (playerBossDistance < 1.0 && !playerInvincible) {
+                    handlePlayerHit();
+                    boss.health -= 10;
+                    createExplosion(boss.position, 0.7, 0xffff00);
+                    updateBossHealthBar();
+                    if (boss.health <= 0) {
+                        score += boss.score;
+                        updateScoreDisplay();
+                        createExplosion(boss.position, 2, 0xff0000);
+                        scene.remove(boss);
+                        bossActive = false;
+                        level++;
+                        nextBossScore = score + 3000; // Increased interval
+                        updateLevelDisplay();
+                        updateBossHealthBar();
+                        if (Math.random() < 0.5) {
+                            createPowerUp(boss.position);
+                        }
+                    }
+                }
+            }
+
             if (playerInvincible) return;
 
-            // Player-enemy collisions
             for (let i = enemies.length - 1; i >= 0; i--) {
                 const enemy = enemies[i];
                 const distance = player.position.distanceTo(enemy.position);
@@ -847,7 +931,6 @@
                 }
             }
 
-            // Player-obstacle collisions
             for (let i = obstacles.length - 1; i >= 0; i--) {
                 const obstacle = obstacles[i];
                 const distance = player.position.distanceTo(obstacle.position);
@@ -857,7 +940,6 @@
                 }
             }
 
-            // Player-power-up collisions
             for (let i = powerUps.length - 1; i >= 0; i--) {
                 const powerUp = powerUps[i];
                 const distance = player.position.distanceTo(powerUp.position);
@@ -866,7 +948,6 @@
                 }
             }
 
-            // Player-enemy projectile collisions
             for (let i = enemyProjectiles.length - 1; i >= 0; i--) {
                 const projectile = enemyProjectiles[i];
                 const distance = player.position.distanceTo(projectile.position);
@@ -879,9 +960,6 @@
             }
         }
 
-        /**
-         * Handle player being hit
-         */
         function handlePlayerHit() {
             if (playerPowerUps.shield) {
                 playerPowerUps.shield = false;
@@ -903,9 +981,6 @@
             player.position.set(0, -6, 0);
         }
 
-        /**
-         * Create power-up pickup
-         */
         function createPowerUp(position) {
             const powerUpGeometry = new THREE.OctahedronGeometry(0.15);
             const powerUpMaterial = new THREE.MeshPhongMaterial({
@@ -919,9 +994,6 @@
             powerUps.push(powerUp);
         }
 
-        /**
-         * Main animation loop
-         */
         function animate(time) {
             requestAnimationFrame(animate);
             const delta = lastTime ? (time - lastTime) / 1000 : 0;
@@ -932,9 +1004,6 @@
             renderer.render(scene, camera);
         }
 
-        /**
-         * Update game state
-         */
         function updateGame(delta, time) {
             if (player.targetX !== undefined) {
                 const playerSpeedFactor = 1 + (playerPowerUps.speed * 0.5);
@@ -1010,18 +1079,20 @@
                 }
             }
 
-            for (let i = enemies.length - 1; i >= 0; i--) {
-                const enemy = enemies[i];
-                enemy.position.y -= enemy.speed * delta * 60;
-                enemy.position.x += Math.sin(time * 0.001 + enemy.position.y) * enemy.speed * 0.5 * delta * 60;
-                enemy.rotation.x += delta;
-                enemy.rotation.z += delta * 0.5;
-                if (enemy.canShoot && performance.now() - enemy.lastShotTime >= CONFIG.enemyFireRate) {
-                    fireEnemyProjectile(enemy);
-                }
-                if (enemy.position.y < -6) {
-                    scene.remove(enemy);
-                    enemies.splice(i, 1);
+            if (!bossActive) {
+                for (let i = enemies.length - 1; i >= 0; i--) {
+                    const enemy = enemies[i];
+                    enemy.position.y -= enemy.speed * delta * 60;
+                    enemy.position.x += Math.sin(time * 0.001 + enemy.position.y) * enemy.speed * 0.5 * delta * 60;
+                    enemy.rotation.x += delta;
+                    enemy.rotation.z += delta * 0.5;
+                    if (enemy.canShoot && performance.now() - enemy.lastShotTime >= CONFIG.enemyFireRate) {
+                        fireEnemyProjectile(enemy);
+                    }
+                    if (enemy.position.y < -6) {
+                        scene.remove(enemy);
+                        enemies.splice(i, 1);
+                    }
                 }
             }
 
@@ -1050,35 +1121,27 @@
 
             for (let i = enemyProjectiles.length - 1; i >= 0; i--) {
                 const projectile = enemyProjectiles[i];
-                projectile.position.y -= projectile.speed * delta * 60;
-                if (projectile.position.y < -6) {
+                if (projectile.velocity) {
+                    projectile.position.x += projectile.velocity.x * delta * 60;
+                    projectile.position.y += projectile.velocity.y * delta * 60;
+                } else {
+                    projectile.position.y -= projectile.speed * delta * 60;
+                }
+                if (projectile.position.y < -6 || Math.abs(projectile.position.x) > 6) {
                     scene.remove(projectile);
                     enemyProjectiles.splice(i, 1);
                 }
             }
 
-            for (let i = explosions.length - 1; i >= 0; i--) {
-                const explosion = explosions[i];
-                explosion.userData.age += delta;
-                const positions = explosion.userData.particlePositions;
-                const particleCount = positions.length / 3;
-                for (let j = 0; j < particleCount; j++) {
-                    const j3 = j * 3;
-                    positions[j3] += (Math.random() - 0.5) * explosion.userData.size * delta * 2;
-                    positions[j3 + 1] += (Math.random() - 0.5) * explosion.userData.size * delta * 2;
-                    positions[j3 + 2] += (Math.random() - 0.5) * explosion.userData.size * delta * 0.5;
-                }
-                explosion.geometry.attributes.position.needsUpdate = true;
-                explosion.material.opacity = 1 - (explosion.userData.age * 2);
-                if (explosion.userData.age > 0.5) {
-                    scene.remove(explosion);
-                    explosions.splice(i, 1);
-                }
-            }
-
             checkCollisions();
 
-            if (time - lastEnemySpawn > CONFIG.enemySpawnRate) {
+            if (score >= nextBossScore && !bossActive) {
+                spawnBoss();
+            }
+
+            if (bossActive) {
+                updateBoss(delta, time);
+            } else if (time - lastEnemySpawn > CONFIG.enemySpawnRate) {
                 spawnEnemy();
                 lastEnemySpawn = time;
                 CONFIG.enemySpawnRate = Math.max(300, CONFIG.enemySpawnRate - 5);
