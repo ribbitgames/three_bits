@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
@@ -11,7 +12,8 @@
             box-sizing: border-box;
         }
 
-        body, html {
+        body,
+        html {
             width: 100%;
             height: 100%;
             overflow: hidden;
@@ -47,7 +49,8 @@
             text-shadow: 1px 1px 2px black;
         }
 
-        #level-info, #timer {
+        #level-info,
+        #timer {
             margin-bottom: 5px;
             font-size: 18px;
         }
@@ -72,7 +75,48 @@
             box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
         }
 
-        /* Welcome Screen Styles */
+        #virtual-joystick {
+            position: fixed;
+            width: 120px;
+            height: 120px;
+            z-index: 15;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+        }
+
+        #joystick-base {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.3));
+            border: 3px solid rgba(255, 255, 255, 0.4);
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+            position: relative;
+        }
+
+        #joystick-handle {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: radial-gradient(circle, #ff6b35, #ff8c42);
+            border: 2px solid rgba(255, 255, 255, 0.6);
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            transition: all 0.1s ease;
+            box-shadow: 0 0 15px rgba(255, 107, 53, 0.6);
+        }
+
+        #virtual-joystick.active {
+            opacity: 0.8;
+        }
+
+        #virtual-joystick.active #joystick-handle {
+            box-shadow: 0 0 25px rgba(255, 107, 53, 0.8);
+        }
+
         #start-screen {
             position: absolute;
             top: 0;
@@ -133,8 +177,15 @@
         }
 
         @keyframes pulse {
-            0%, 100% { transform: scale(1); }
-            50% { transform: scale(1.05); }
+
+            0%,
+            100% {
+                transform: scale(1);
+            }
+
+            50% {
+                transform: scale(1.05);
+            }
         }
 
         .pulse-animation {
@@ -146,6 +197,7 @@
         }
     </style>
 </head>
+
 <body>
     <div id="game-container">
         <canvas id="game-canvas"></canvas>
@@ -154,8 +206,13 @@
             <div id="timer">Time: <span id="time-counter">0</span></div>
         </div>
         <div id="game-message" style="display: none;"></div>
-        
-        <!-- Welcome Screen -->
+
+        <div id="virtual-joystick">
+            <div id="joystick-base">
+                <div id="joystick-handle"></div>
+            </div>
+        </div>
+
         <div id="start-screen">
             <h1>Mazeball</h1>
             <div class="game-info">
@@ -169,19 +226,12 @@
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script>
-        /**
-         * Mazeball
-         * A 3D maze game where players navigate through increasingly complex mazes.
-         */
-
-        // Game constants
         const CELL_SIZE = 2;
         const WALL_HEIGHT = 1.5;
         const PLAYER_SPEED = 4.5;
         const PLAYER_RADIUS = 0.3;
         const LEVELS = 5;
 
-        // Game state variables
         let scene, camera, renderer, player, goalMarker, goalParticles, playerLight;
         let mazeCells = [];
         let mazeWidth = 5;
@@ -192,21 +242,22 @@
         let isGameRunning = false;
         let isLevelComplete = false;
         let isDead = false;
-        let touchStartX, touchStartY;
-        let targetX, targetZ;
-        let isMoving = false;
-        let isMouseDown = false;
-        let mouseDirection = { x: 0, z: 0 };
         let animationTime = 0;
         let currentMazeData = null;
         let gameStarted = false;
 
-        // DOM elements
+        let joystickActive = false;
+        let joystickDirection = { x: 0, z: 0 };
+        let joystickBase = { x: 0, y: 0 };
+
         const levelNumber = document.getElementById('level-number');
         const timeCounter = document.getElementById('time-counter');
         const gameMessage = document.getElementById('game-message');
         const startScreen = document.getElementById('start-screen');
         const startButton = document.getElementById('start-button');
+        const virtualJoystick = document.getElementById('virtual-joystick');
+        const joystickBaseElement = document.getElementById('joystick-base');
+        const joystickHandle = document.getElementById('joystick-handle');
 
         function init() {
             scene = new THREE.Scene();
@@ -243,14 +294,13 @@
             scene.add(playerLight);
 
             const groundGeometry = new THREE.PlaneGeometry(100, 100);
-            const groundMaterial = new THREE.MeshStandardMaterial({ 
+            const groundMaterial = new THREE.MeshStandardMaterial({
                 color: 0x4A7023,
                 roughness: 0.8,
                 metalness: 0.2
             });
 
             const gridSize = 20;
-            const gridGeometry = new THREE.PlaneGeometry(gridSize * 2, gridSize * 2, 100, 100);
             const lineGeometry = new THREE.EdgesGeometry(new THREE.PlaneGeometry(gridSize * 2, gridSize * 2, 20, 20));
             const lineMaterial = new THREE.LineBasicMaterial({ color: 0x5A8033, linewidth: 1 });
             const gridLines = new THREE.LineSegments(lineGeometry, lineMaterial);
@@ -264,7 +314,7 @@
             scene.add(ground);
 
             const playerGeometry = new THREE.SphereGeometry(PLAYER_RADIUS, 32, 32);
-            const playerMaterial = new THREE.MeshStandardMaterial({ 
+            const playerMaterial = new THREE.MeshStandardMaterial({
                 color: 0xFF5500,
                 emissive: 0xFF5500,
                 emissiveIntensity: 0.2,
@@ -277,9 +327,9 @@
             scene.add(player);
 
             const goalGeometry = new THREE.CylinderGeometry(0.5, 0.5, 0.1, 32);
-            const goalMaterial = new THREE.MeshStandardMaterial({ 
-                color: 0x00FF00, 
-                emissive: 0x00FF00, 
+            const goalMaterial = new THREE.MeshStandardMaterial({
+                color: 0x00FF00,
+                emissive: 0x00FF00,
                 emissiveIntensity: 0.5,
                 transparent: true,
                 opacity: 0.8
@@ -307,21 +357,117 @@
             goalMarker.add(goalParticles);
 
             window.addEventListener('resize', onWindowResize);
+            document.addEventListener('touchstart', onTouchStart, { passive: false });
+            document.addEventListener('touchmove', onTouchMove, { passive: false });
+            document.addEventListener('touchend', onTouchEnd, { passive: false });
             document.addEventListener('mousedown', onMouseDown);
-            document.addEventListener('mouseup', onMouseUp);
             document.addEventListener('mousemove', onMouseMove);
-            document.addEventListener('touchstart', onTouchStart);
-            document.addEventListener('touchend', onTouchEnd);
-            document.addEventListener('touchmove', onTouchMove);
-
-            // Welcome screen event listener
+            document.addEventListener('mouseup', onMouseUp);
             startButton.addEventListener('click', startGame);
 
             currentMazeData = null;
             completedLevels = 0;
-            
-            // Don't start the game automatically - wait for user input
             animate();
+        }
+
+        function onTouchStart(event) {
+            event.preventDefault();
+            if (!gameStarted) return;
+
+            if (gameMessage.style.display !== 'none') {
+                handleGameMessage();
+                return;
+            }
+
+            if (!isGameRunning || isDead || isLevelComplete) return;
+
+            const touch = event.touches[0];
+            startJoystick(touch.clientX, touch.clientY);
+        }
+
+        function onTouchMove(event) {
+            event.preventDefault();
+            if (!joystickActive) return;
+
+            const touch = event.touches[0];
+            updateJoystick(touch.clientX, touch.clientY);
+        }
+
+        function onTouchEnd(event) {
+            event.preventDefault();
+            endJoystick();
+        }
+
+        function onMouseDown(event) {
+            if (!gameStarted) return;
+
+            if (gameMessage.style.display !== 'none') {
+                handleGameMessage();
+                return;
+            }
+
+            if (!isGameRunning || isDead || isLevelComplete) return;
+
+            startJoystick(event.clientX, event.clientY);
+        }
+
+        function onMouseMove(event) {
+            if (!joystickActive) return;
+            updateJoystick(event.clientX, event.clientY);
+        }
+
+        function onMouseUp(event) {
+            endJoystick();
+        }
+
+        function startJoystick(clientX, clientY) {
+            joystickActive = true;
+            joystickBase.x = clientX;
+            joystickBase.y = clientY;
+
+            virtualJoystick.style.left = (clientX - 60) + 'px';
+            virtualJoystick.style.top = (clientY - 60) + 'px';
+            virtualJoystick.classList.add('active');
+
+            updateJoystick(clientX, clientY);
+        }
+
+        function updateJoystick(clientX, clientY) {
+            const deltaX = clientX - joystickBase.x;
+            const deltaY = clientY - joystickBase.y;
+            const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+            const maxDistance = 60;
+
+            let normalizedX = distance > 0 ? deltaX / maxDistance : 0;
+            let normalizedY = distance > 0 ? deltaY / maxDistance : 0;
+
+            const clampedDistance = Math.min(distance, maxDistance);
+            const clampedX = distance > maxDistance ? (deltaX / distance) * maxDistance : deltaX;
+            const clampedY = distance > maxDistance ? (deltaY / distance) * maxDistance : deltaY;
+
+            joystickHandle.style.transform = `translate(-50%, -50%) translate(${clampedX}px, ${clampedY}px)`;
+
+            joystickDirection.x = normalizedX;
+            joystickDirection.z = normalizedY;
+        }
+
+        function endJoystick() {
+            joystickActive = false;
+            virtualJoystick.classList.remove('active');
+            joystickHandle.style.transform = 'translate(-50%, -50%)';
+            joystickDirection.x = 0;
+            joystickDirection.z = 0;
+        }
+
+        function getInputDirection() {
+            const length = Math.sqrt(joystickDirection.x * joystickDirection.x + joystickDirection.z * joystickDirection.z);
+            if (length > 0) {
+                return {
+                    x: joystickDirection.x / length,
+                    z: joystickDirection.z / length
+                };
+            }
+            return { x: 0, z: 0 };
         }
 
         function startGame() {
@@ -366,10 +512,10 @@
                 let wy = Math.floor(Math.random() * (height - 2)) + 1;
                 if (maze[wy][wx] === 1) {
                     let openNeighbors = 0;
-                    if (wx > 0 && maze[wy][wx-1] === 0) openNeighbors++;
-                    if (wx < width-1 && maze[wy][wx+1] === 0) openNeighbors++;
-                    if (wy > 0 && maze[wy-1][wx] === 0) openNeighbors++;
-                    if (wy < height-1 && maze[wy+1][wx] === 0) openNeighbors++;
+                    if (wx > 0 && maze[wy][wx - 1] === 0) openNeighbors++;
+                    if (wx < width - 1 && maze[wy][wx + 1] === 0) openNeighbors++;
+                    if (wy > 0 && maze[wy - 1][wx] === 0) openNeighbors++;
+                    if (wy < height - 1 && maze[wy + 1][wx] === 0) openNeighbors++;
                     if (openNeighbors <= 2) {
                         maze[wy][wx] = 0;
                     }
@@ -412,7 +558,7 @@
             for (let y = 1; y < mazeData.length - 1; y++) {
                 for (let x = 1; x < mazeData[y].length - 1; x++) {
                     if (mazeData[y][x] === 0) {
-                        emptyCells.push({x, y});
+                        emptyCells.push({ x, y });
                     }
                 }
             }
@@ -589,66 +735,46 @@
             animateCompletionEffect();
         }
 
-        function movePlayerTowards(tX, tZ) {
-            if (!isGameRunning) return;
-            targetX = tX;
-            targetZ = tZ;
-            isMoving = true;
-        }
+        function updatePlayerMovement() {
+            if (!isGameRunning || isDead) return;
 
-        function updatePlayerPosition() {
-            if (!isGameRunning || !isMoving) return false;
-            const directionX = targetX - player.position.x;
-            const directionZ = targetZ - player.position.z;
-            const distanceToTarget = Math.sqrt(directionX * directionX + directionZ * directionZ);
-            if (distanceToTarget < 0.1) {
-                isMoving = false;
-                return true;
-            }
-            const normalizedDirX = directionX / distanceToTarget;
-            const normalizedDirZ = directionZ / distanceToTarget;
+            const direction = getInputDirection();
+            if (direction.x === 0 && direction.z === 0) return;
+
             const deltaTime = 0.016;
-            const newX = player.position.x + normalizedDirX * PLAYER_SPEED * deltaTime;
-            const newZ = player.position.z + normalizedDirZ * PLAYER_SPEED * deltaTime;
-            let collision = false;
-            mazeCells.forEach(wall => {
+            const newX = player.position.x + direction.x * PLAYER_SPEED * deltaTime;
+            const newZ = player.position.z + direction.z * PLAYER_SPEED * deltaTime;
+
+            for (const wall of mazeCells) {
                 const wallMinX = wall.position.x - CELL_SIZE / 2;
                 const wallMaxX = wall.position.x + CELL_SIZE / 2;
                 const wallMinZ = wall.position.z - CELL_SIZE / 2;
                 const wallMaxZ = wall.position.z + CELL_SIZE / 2;
+
                 if (
                     newX + PLAYER_RADIUS > wallMinX &&
                     newX - PLAYER_RADIUS < wallMaxX &&
                     newZ + PLAYER_RADIUS > wallMinZ &&
                     newZ - PLAYER_RADIUS < wallMaxZ
                 ) {
-                    collision = true;
+                    playerDeath();
+                    return;
                 }
-            });
-            if (!collision) {
-                player.position.x = newX;
-                player.position.z = newZ;
-            } else {
-                isMoving = false;
-                return true;
             }
+
+            player.position.x = newX;
+            player.position.z = newZ;
             camera.position.x = player.position.x;
             camera.position.z = player.position.z;
-            checkGoal();
-            return false;
-        }
 
-        function onWindowResize() {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
+            checkGoal();
         }
 
         function playerDeath() {
             isGameRunning = false;
             isDead = true;
-            isMoving = false;
-            isMouseDown = false;
+            endJoystick();
+
             player.material.color.set(0xFF0000);
             player.material.emissive.set(0xFF0000);
             player.material.emissiveIntensity = 0.5;
@@ -729,10 +855,13 @@
             animateExplosion();
         }
 
-        function onMouseDown(event) {
-            event.preventDefault();
-            if (!gameStarted) return;
-            
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function handleGameMessage() {
             if (isLevelComplete) {
                 gameMessage.style.display = 'none';
                 if (currentLevel < LEVELS) {
@@ -747,116 +876,22 @@
                 gameMessage.style.display = 'none';
                 startLevel(currentLevel, false);
                 return;
-            }
-            isMouseDown = true;
-            updateMouseDirection(event);
-        }
-
-        function onMouseUp(event) {
-            event.preventDefault();
-            isMouseDown = false;
-            isMoving = false;
-        }
-
-        function onMouseMove(event) {
-            event.preventDefault();
-            if (isMouseDown) {
-                updateMouseDirection(event);
-            }
-        }
-
-        function updateMouseDirection(event) {
-            const mouse = new THREE.Vector2(
-                (event.clientX / window.innerWidth) * 2 - 1,
-                -(event.clientY / window.innerHeight) * 2 + 1
-            );
-            const raycaster = new THREE.Raycaster();
-            raycaster.setFromCamera(mouse, camera);
-            const groundObjects = scene.children.filter(child => 
-                child.geometry instanceof THREE.PlaneGeometry
-            );
-            const intersects = raycaster.intersectObjects(groundObjects);
-            if (intersects.length > 0) {
-                const hitPoint = intersects[0].point;
-                const dirX = hitPoint.x - player.position.x;
-                const dirZ = hitPoint.z - player.position.z;
-                const length = Math.sqrt(dirX * dirX + dirZ * dirZ);
-                if (length > 0.001) {
-                    mouseDirection.x = dirX / length;
-                    mouseDirection.z = dirZ / length;
-                    isMoving = true;
-                }
-            }
-        }
-
-        function onTouchStart(event) {
-            event.preventDefault();
-            if (!gameStarted) return;
-            
-            if (isLevelComplete) {
-                gameMessage.style.display = 'none';
-                if (currentLevel < LEVELS) {
-                    startLevel(currentLevel + 1, true);
-                } else {
-                    completedLevels = 0;
-                    startLevel(1, true);
-                }
-                return;
-            }
-            if (isDead) {
-                gameMessage.style.display = 'none';
-                startLevel(currentLevel, false);
-                return;
-            }
-            touchStartX = event.touches[0].clientX;
-            touchStartY = event.touches[0].clientY;
-            isMouseDown = true;
-            updateTouchDirection(event);
-        }
-
-        function onTouchEnd(event) {
-            event.preventDefault();
-            isMouseDown = false;
-            isMoving = false;
-        }
-
-        function onTouchMove(event) {
-            event.preventDefault();
-            if (!isGameRunning) return;
-            updateTouchDirection(event);
-        }
-
-        function updateTouchDirection(event) {
-            if (!isGameRunning) return;
-            const touchX = event.touches[0].clientX;
-            const touchY = event.touches[0].clientY;
-            const centerX = window.innerWidth / 2;
-            const centerY = window.innerHeight / 2;
-            const dirX = touchX - centerX;
-            const dirY = touchY - centerY;
-            const length = Math.sqrt(dirX * dirX + dirY * dirY);
-            if (length > 20) {
-                mouseDirection.x = dirX / length;
-                mouseDirection.z = dirY / length;
-                isMoving = true;
-            } else {
-                isMoving = false;
             }
         }
 
         function animate() {
             requestAnimationFrame(animate);
             animationTime += 0.016;
+
             if (isGameRunning && gameStarted) {
                 const elapsed = Math.floor((Date.now() - startTime) / 1000);
                 timeCounter.textContent = elapsed;
-                if (isMouseDown && isMoving) {
-                    moveInMouseDirection();
-                } else if (isMoving) {
-                    updatePlayerPosition();
-                }
+
+                updatePlayerMovement();
+
                 playerLight.position.copy(player.position);
                 playerLight.position.y = PLAYER_RADIUS * 2;
+
                 if (goalMarker) {
                     goalMarker.rotation.y += 0.02;
                     goalMarker.position.y = 0.05 + Math.sin(animationTime * 2) * 0.05;
@@ -870,44 +905,19 @@
                             const angle = Math.atan2(z, x) + 0.01;
                             const radius = Math.sqrt(x * x + z * z);
                             particles[i] = Math.cos(angle) * radius;
-                            particles[i + 1] = Math.sin(animationTime * 3 + i/3) * 0.2;
+                            particles[i + 1] = Math.sin(animationTime * 3 + i / 3) * 0.2;
                             particles[i + 2] = Math.sin(angle) * radius;
                         }
                         goalParticles.geometry.attributes.position.needsUpdate = true;
                     }
                 }
             }
-            renderer.render(scene, camera);
-        }
 
-        function moveInMouseDirection() {
-            if (!isGameRunning || !isMoving || isDead) return;
-            const deltaTime = 0.016;
-            const newX = player.position.x + mouseDirection.x * PLAYER_SPEED * deltaTime;
-            const newZ = player.position.z + mouseDirection.z * PLAYER_SPEED * deltaTime;
-            for (const wall of mazeCells) {
-                const wallMinX = wall.position.x - CELL_SIZE / 2;
-                const wallMaxX = wall.position.x + CELL_SIZE / 2;
-                const wallMinZ = wall.position.z - CELL_SIZE / 2;
-                const wallMaxZ = wall.position.z + CELL_SIZE / 2;
-                if (
-                    newX + PLAYER_RADIUS > wallMinX &&
-                    newX - PLAYER_RADIUS < wallMaxX &&
-                    newZ + PLAYER_RADIUS > wallMinZ &&
-                    newZ - PLAYER_RADIUS < wallMaxZ
-                ) {
-                    playerDeath();
-                    return;
-                }
-            }
-            player.position.x = newX;
-            player.position.z = newZ;
-            camera.position.x = player.position.x;
-            camera.position.z = player.position.z;
-            checkGoal();
+            renderer.render(scene, camera);
         }
 
         window.onload = init;
     </script>
 </body>
+
 </html>
