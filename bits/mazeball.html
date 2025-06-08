@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Maze Runner Game</title>
+    <title>Mazeball</title>
     <style>
         * {
             margin: 0;
@@ -15,9 +15,11 @@
             width: 100%;
             height: 100%;
             overflow: hidden;
-            font-family: Arial, sans-serif;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background-color: #000;
             touch-action: none;
+            -webkit-user-select: none;
+            user-select: none;
         }
 
         #game-container {
@@ -69,6 +71,79 @@
             border: 2px solid rgba(255, 255, 255, 0.3);
             box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
         }
+
+        /* Welcome Screen Styles */
+        #start-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: linear-gradient(135deg, rgba(0, 0, 0, 0.9), rgba(30, 60, 114, 0.8));
+            color: white;
+            z-index: 30;
+            backdrop-filter: blur(20px);
+        }
+
+        h1 {
+            margin-bottom: 30px;
+            font-size: 48px;
+            text-align: center;
+            background: linear-gradient(45deg, #00FF00, #32CD32);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            text-shadow: none;
+        }
+
+        .game-info {
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 18px;
+            line-height: 1.6;
+            max-width: 600px;
+            opacity: 0.9;
+        }
+
+        button {
+            padding: 18px 36px;
+            font-size: 20px;
+            background: linear-gradient(45deg, #4CAF50, #45a049);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            touch-action: manipulation;
+            box-shadow: 0 4px 15px rgba(76, 175, 80, 0.3);
+            font-weight: bold;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(76, 175, 80, 0.4);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+
+        .pulse-animation {
+            animation: pulse 2s infinite;
+        }
+
+        .hidden {
+            display: none !important;
+        }
     </style>
 </head>
 <body>
@@ -79,12 +154,23 @@
             <div id="timer">Time: <span id="time-counter">0</span></div>
         </div>
         <div id="game-message" style="display: none;"></div>
+        
+        <!-- Welcome Screen -->
+        <div id="start-screen">
+            <h1>Mazeball</h1>
+            <div class="game-info">
+                Navigate through increasingly complex 3D mazes!<br>
+                Find the glowing green goal to advance levels.<br>
+                Be careful not to touch the walls - they're deadly!
+            </div>
+            <button id="start-button" class="pulse-animation">Start Adventure</button>
+        </div>
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script>
         /**
-         * Maze Runner Game
+         * Mazeball
          * A 3D maze game where players navigate through increasingly complex mazes.
          */
 
@@ -113,11 +199,14 @@
         let mouseDirection = { x: 0, z: 0 };
         let animationTime = 0;
         let currentMazeData = null;
+        let gameStarted = false;
 
         // DOM elements
         const levelNumber = document.getElementById('level-number');
         const timeCounter = document.getElementById('time-counter');
         const gameMessage = document.getElementById('game-message');
+        const startScreen = document.getElementById('start-screen');
+        const startButton = document.getElementById('start-button');
 
         function init() {
             scene = new THREE.Scene();
@@ -225,10 +314,20 @@
             document.addEventListener('touchend', onTouchEnd);
             document.addEventListener('touchmove', onTouchMove);
 
+            // Welcome screen event listener
+            startButton.addEventListener('click', startGame);
+
             currentMazeData = null;
             completedLevels = 0;
-            startLevel(currentLevel, true);
+            
+            // Don't start the game automatically - wait for user input
             animate();
+        }
+
+        function startGame() {
+            gameStarted = true;
+            startScreen.classList.add('hidden');
+            startLevel(currentLevel, true);
         }
 
         function generateMaze(width, height) {
@@ -632,6 +731,8 @@
 
         function onMouseDown(event) {
             event.preventDefault();
+            if (!gameStarted) return;
+            
             if (isLevelComplete) {
                 gameMessage.style.display = 'none';
                 if (currentLevel < LEVELS) {
@@ -690,6 +791,8 @@
 
         function onTouchStart(event) {
             event.preventDefault();
+            if (!gameStarted) return;
+            
             if (isLevelComplete) {
                 gameMessage.style.display = 'none';
                 if (currentLevel < LEVELS) {
@@ -744,7 +847,7 @@
         function animate() {
             requestAnimationFrame(animate);
             animationTime += 0.016;
-            if (isGameRunning) {
+            if (isGameRunning && gameStarted) {
                 const elapsed = Math.floor((Date.now() - startTime) / 1000);
                 timeCounter.textContent = elapsed;
                 if (isMouseDown && isMoving) {
